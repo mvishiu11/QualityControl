@@ -110,7 +110,7 @@ void AmplitudePostProcTask::initialize(Trigger, framework::ServiceRegistryRef se
   
   // Create individual histograms for each channel
   for (unsigned int chID = 0; chID < sNCHANNELS_PM; chID++) {
-    const std::string histName = Form("Amp_channel%03d", chID);
+    const std::string histName = Form("AmplitudePerChannel/Amp_channel%03d", chID);
     const std::string histTitle = Form("FV0 Amplitude Channel %d;Channel amplitude (ADC ch);Counts", chID);
     
     mMapHistAmpPerChannel[chID] = helper::registerHist<TH1F>(
