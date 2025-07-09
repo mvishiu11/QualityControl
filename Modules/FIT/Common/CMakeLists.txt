@@ -6,6 +6,7 @@ set(SRCS
   src/HelperCommon.cxx
   src/HelperFIT.cxx
   src/HelperHist.cxx
+  src/HelperGraph.cxx
   src/HelperLUT.cxx
   src/DigitSync.cxx
 )
@@ -15,6 +16,7 @@ set(HEADERS
   include/FITCommon/HelperCommon.h
   include/FITCommon/HelperFIT.h
   include/FITCommon/HelperHist.h
+  include/FITCommon/HelperGraph.h
   include/FITCommon/HelperLUT.h
   include/FITCommon/DigitSync.h
   include/FITCommon/PostProcHelper.h

@@ -18,14 +18,22 @@
 #ifndef QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H
 #define QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H
 
+// O2 QC / framework
 #include "QualityControl/PostProcessingInterface.h"
 #include "QualityControl/DatabaseInterface.h"
 #include "FV0Base/Constants.h"
 #include "CCDB/CcdbApi.h"
 
+// ROOT
+#include <TGraphErrors.h>
+#include <TLine.h>
+#include <TF1.h>
+
+// STL
+#include <array>
+#include <map>
 #include <memory>
 #include <string>
-#include <map>
 
 class TH1F;
 class TH2F;
@@ -33,60 +41,55 @@ class TH2F;
 namespace o2::quality_control_modules::fv0
 {
 
-/// \brief Post-processing task for FV0 amplitude analysis
-/// \details Creates individual amplitude histograms for each channel and combined histograms
-///          for overall analysis
-/// \author Jakub Muszyński jakub.milosz.muszynski@cern.ch
-class AmplitudePostProcTask final : public quality_control::postprocessing::PostProcessingInterface
-{
- public:
-  /// \brief Constructor
-  AmplitudePostProcTask() = default;
-  
-  /// \brief Destructor
-  ~AmplitudePostProcTask() override;
+    class AmplitudePostProcTask final : public quality_control::postprocessing::PostProcessingInterface
+    {
+        public:
+            AmplitudePostProcTask()  = default;
+            ~AmplitudePostProcTask() override = default;
 
-  /// \brief Configuration of the task
-  void configure(const boost::property_tree::ptree& config) override;
-  
-  /// \brief Initialization of the task
-  void initialize(quality_control::postprocessing::Trigger trigger, framework::ServiceRegistryRef services) override;
-  
-  /// \brief Update of the task, triggered by external events
-  void update(quality_control::postprocessing::Trigger trigger, framework::ServiceRegistryRef services) override;
-  
-  /// \brief Finalization of the task
-  void finalize(quality_control::postprocessing::Trigger trigger, framework::ServiceRegistryRef services) override;
+            // QC framework hooks
+            void configure  (const boost::property_tree::ptree& config) override;
+            void initialize (quality_control::postprocessing::Trigger trigger,
+                            framework::ServiceRegistryRef services)   override;
+            void update     (quality_control::postprocessing::Trigger trigger,
+                            framework::ServiceRegistryRef services)   override;
+            void finalize   (quality_control::postprocessing::Trigger trigger,
+                            framework::ServiceRegistryRef services)   override;
 
- private:
-  /// \brief Reset all histogram objects
-  void reset();
-  
-  /// \brief Set timestamp metadata to all monitor objects
-  /// \param timestamp Unix timestamp in milliseconds
-  void setTimestampToMOs(long long timestamp);
+        private:
+            // helper utilities
+            void reset();
+            void setTimestampToMOs(long long timestamp);
 
-  // Constants
-  static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
-  
-  // Configuration parameters
-  std::string mPathDigitQcTask;                      ///< Path to the digit QC task
-  std::string mCcdbUrl;                              ///< CCDB URL
-  std::string mTimestampMetaField{"timestampTF"};    ///< Metadata field for timestamp
-  int mAmpMin{-100};                                 ///< Minimum amplitude for histograms
-  int mAmpMax{4100};                                 ///< Maximum amplitude for histograms  
-  int mAmpBins{4200};                                ///< Number of bins for amplitude histograms
+            //  Configuration & constants
+            static constexpr std::size_t sNCHANNELS_PM =
+                o2::fv0::Constants::nFv0ChannelsPlusRef;
 
-  // Database interfaces
-  o2::quality_control::repository::DatabaseInterface* mDatabase = nullptr; ///< Database interface
-  o2::ccdb::CcdbApi mCcdbApi;                                               ///< CCDB API
+            std::string mPathDigitQcTask;                   ///< Source MO path
+            std::string mCcdbUrl;                           ///< CCDB URL
+            std::string mTimestampMetaField{"timestampTF"}; ///< Metadata key
+            int    mAmpMin  {-100};                         ///< Histogram ADC min
+            int    mAmpMax  {4100};                         ///< Histogram ADC max
+            int    mAmpBins {4200};                         ///< Histogram bins
+            double mSliceFrac{0.25};                        ///< Fit window half-width (fraction of peak)
 
-  // Monitor objects
-  std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel; ///< Individual channel amplitude histograms
-  std::unique_ptr<TH1F> mHistAmpAll;                                   ///< Combined amplitude histogram for all channels
-  std::unique_ptr<TH1F> mHistAmpNormPerChannel;                        ///< Normalized amplitude histogram per channel
-};
+            //  QC managed objects
+            o2::quality_control::repository::DatabaseInterface* mDatabase{nullptr};
+            o2::ccdb::CcdbApi mCcdbApi;
 
-} // namespace o2::quality_control_modules::fv0
+            std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
+            std::unique_ptr<TH1F> mHistAmpAll;
+            std::unique_ptr<TH1F> mHistAmpNormPerChannel;
 
+            // Gaussian fit results
+            std::array<double, sNCHANNELS_PM> mMean{};
+            std::array<double, sNCHANNELS_PM> mSigma{};
+            std::array<double, sNCHANNELS_PM> mChanX{};
+            std::array<double, sNCHANNELS_PM> mChanXErr{};
+
+            // Gaussian error graph
+            std::unique_ptr<TGraphErrors> mGraphMPVDiv16;
+    };
+
+}   // namespace o2::quality_control_modules::fv0
 #endif // QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H
