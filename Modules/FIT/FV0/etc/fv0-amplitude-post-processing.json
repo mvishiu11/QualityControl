@@ -70,31 +70,6 @@
           "requireErrorBarOverlap": "true",
           "enableMessage": "true"
         }
-      },
-      "FV0AmplitudeDistributionCheck": {
-        "active": "true",
-        "className": "o2::quality_control_modules::fv0::AmplitudeDistributionCheck", 
-        "moduleName": "QcFV0",
-        "policy": "OnAny",
-        "detectorName": "FV0",
-        "dataSource": [
-          {
-            "type": "PostProcessing",
-            "name": "AmplitudePostProc",
-            "MOs": ["AmpAllChannels", "AmpNormPerChannel"]
-          }
-        ],
-        "checkParameters": {
-          "minEntries": "1000",
-          "minEntriesWarning": "100", 
-          "maxEmptyChannelFraction": "0.1",
-          "maxOverflowFraction": "0.05",
-          "maxUnderflowFraction": "0.05",
-          "minMeanAmplitude": "10.0",
-          "maxMeanAmplitude": "1000.0",
-          "checkIndividualChannels": "false",
-          "enableMessage": "true"
-        }
       }
     },
     "aggregators": {
@@ -108,10 +83,6 @@
           {
             "type": "Check",
             "name": "FV0GaussianReferenceCheck"
-          },
-          {
-            "type": "Check", 
-            "name": "FV0AmplitudeDistributionCheck"
           }
         ]
       }

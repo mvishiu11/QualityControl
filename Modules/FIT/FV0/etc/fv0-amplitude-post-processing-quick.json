@@ -59,7 +59,8 @@
             "numOrbitsInTF": "32",
             "cycleDurationMoName": "CycleDurationNTF",
             "timestampSourceLhcIf": "metadata",
-            "pathDigitQcTask": "FV0/MO/DigitsNew/"
+            "pathDigitQcTask": "FV0/MO/DigitsNew/",
+            "sliceFrac": "0.15"
           },
           "initTrigger": [
             "userorcontrol"
