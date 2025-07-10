@@ -20,15 +20,12 @@
 
 // O2 QC / framework
 #include "QualityControl/PostProcessingInterface.h"
-#include "QualityControl/DatabaseInterface.h"
 #include "FV0Base/Constants.h"
-#include "CCDB/CcdbApi.h"
-
+#include "FITCommon/PostProcHelper.h"
 // ROOT
 #include <TGraphErrors.h>
 #include <TLine.h>
 #include <TF1.h>
-
 // STL
 #include <array>
 #include <map>
@@ -40,56 +37,48 @@ class TH2F;
 
 namespace o2::quality_control_modules::fv0
 {
-
     class AmplitudePostProcTask final : public quality_control::postprocessing::PostProcessingInterface
     {
         public:
-            AmplitudePostProcTask()  = default;
+            AmplitudePostProcTask() = default;
             ~AmplitudePostProcTask() override = default;
-
-            // QC framework hooks
-            void configure  (const boost::property_tree::ptree& config) override;
-            void initialize (quality_control::postprocessing::Trigger trigger,
-                            framework::ServiceRegistryRef services)   override;
-            void update     (quality_control::postprocessing::Trigger trigger,
-                            framework::ServiceRegistryRef services)   override;
-            void finalize   (quality_control::postprocessing::Trigger trigger,
-                            framework::ServiceRegistryRef services)   override;
+            
+            void configure(const boost::property_tree::ptree& config) override;
+            void initialize(quality_control::postprocessing::Trigger trigger,
+                        framework::ServiceRegistryRef services) override;
+            void update(quality_control::postprocessing::Trigger trigger,
+                    framework::ServiceRegistryRef services) override;
+            void finalize(quality_control::postprocessing::Trigger trigger,
+                        framework::ServiceRegistryRef services) override;
 
         private:
-            // helper utilities
+            o2::quality_control_modules::fit::PostProcHelper mPostProcHelper;
             void reset();
-            void setTimestampToMOs(long long timestamp);
-
-            //  Configuration & constants
-            static constexpr std::size_t sNCHANNELS_PM =
-                o2::fv0::Constants::nFv0ChannelsPlusRef;
-
-            std::string mPathDigitQcTask;                   ///< Source MO path
-            std::string mCcdbUrl;                           ///< CCDB URL
-            std::string mTimestampMetaField{"timestampTF"}; ///< Metadata key
-            int    mAmpMin  {-100};                         ///< Histogram ADC min
-            int    mAmpMax  {4100};                         ///< Histogram ADC max
-            int    mAmpBins {4200};                         ///< Histogram bins
-            double mSliceFrac{0.25};                        ///< Fit window half-width (fraction of peak)
-
-            //  QC managed objects
-            o2::quality_control::repository::DatabaseInterface* mDatabase{nullptr};
-            o2::ccdb::CcdbApi mCcdbApi;
-
+            void setTimestampToMOs();
+            
+            // Configuration & constants
+            static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
+            
+            // Configuration parameters
+            int mAmpMin{-100};              ///< Histogram ADC min
+            int mAmpMax{4100};              ///< Histogram ADC max  
+            int mAmpBins{4200};             ///< Histogram bins
+            double mSliceFrac{0.25};        ///< Fit window half-width (fraction of peak)
+            
+            // QC managed objects
             std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
             std::unique_ptr<TH1F> mHistAmpAll;
             std::unique_ptr<TH1F> mHistAmpNormPerChannel;
-
+            
             // Gaussian fit results
             std::array<double, sNCHANNELS_PM> mMean{};
             std::array<double, sNCHANNELS_PM> mSigma{};
             std::array<double, sNCHANNELS_PM> mChanX{};
             std::array<double, sNCHANNELS_PM> mChanXErr{};
-
+            
             // Gaussian error graph
             std::unique_ptr<TGraphErrors> mGraphMPVDiv16;
     };
+}
 
-}   // namespace o2::quality_control_modules::fv0
 #endif // QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H
