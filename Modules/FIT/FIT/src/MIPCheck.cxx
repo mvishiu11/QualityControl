@@ -352,9 +352,9 @@ void MIPCheck::beautify(std::shared_ptr<MonitorObject> mo, Quality checkResult)
         h->GetListOfFunctions()->Add(lineLow);
         double sigmaWarningHigh = meanValues.at(i) + mSigmaWarnings.at(i);
         auto* lineHigh = new TLine(sigmaWarningHigh, 0, sigmaWarningHigh, h->GetMaximum());
-        lineLow->SetLineColor(kOrange);
-        lineLow->SetLineStyle(kDotted);
-        h->GetListOfFunctions()->Add(lineLow);
+        lineHigh->SetLineColor(kOrange);
+        lineHigh->SetLineStyle(kDotted);
+        h->GetListOfFunctions()->Add(lineHigh);
       }
 
       // Sigma error
