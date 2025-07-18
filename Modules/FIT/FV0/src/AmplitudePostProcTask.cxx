@@ -119,7 +119,7 @@ void AmplitudePostProcTask::initializeEmpiricalParameters()
     mChannelFitParams[36] = ChannelFitParams(0.36, 0.36, false, 1, "E_R51"); // Ring R51, Sector E
     mChannelFitParams[39] = ChannelFitParams(0.30, 0.40, false, 1, "H_R51"); // Ring R51, Sector H
     
-    // Ring R52 specific overrides
+        // Ring R52 specific overrides
     mChannelFitParams[40] = ChannelFitParams(0.30, 0.30, false, 1, "A_R52"); // Ring R52, Sector A
     mChannelFitParams[42] = ChannelFitParams(0.36, 0.36, false, 1, "C_R52"); // Ring R52, Sector C
     mChannelFitParams[43] = ChannelFitParams(0.36, 0.36, false, 1, "D_R52"); // Ring R52, Sector D
@@ -263,7 +263,7 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
 {
     mPostProcHelper.update(trig, serviceReg);
     
-    constexpr double kScale = 16.0;  // pp scaling factor
+    constexpr double kScale = 15.0;  // pp scaling factor
     
     auto h2 = mPostProcHelper.template getObject<TH2F>("AmpPerChannel");
     if (!h2) {
@@ -366,7 +366,7 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     
     for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
         mGraphMPVDiv16->SetPoint(i, mChanX[i], mMean[i] / kScale);
-        mGraphMPVDiv16->SetPointError(i, mChanXErr[i], mSigma[i] / kScale);
+        mGraphMPVDiv16->SetPointError(i, mChanXErr[i], 0.);
     }
     
     logFittingStatistics();
