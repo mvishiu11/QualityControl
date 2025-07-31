@@ -7,6 +7,7 @@
 #pragma link C++ class o2::quality_control_modules::ft0::DigitQcTask + ;
 #pragma link C++ class o2::quality_control_modules::ft0::MergedTreeCheck + ;
 #pragma link C++ class o2::quality_control_modules::ft0::PostProcTask + ;
+#pragma link C++ class o2::quality_control_modules::ft0::AmplitudePostProcTask + ;
 #pragma link C++ class o2::quality_control_modules::ft0::GenericCheck + ;
 #pragma link C++ class o2::quality_control_modules::ft0::CFDEffCheck + ;
 #pragma link C++ class o2::quality_control_modules::ft0::FractionCheck + ;
