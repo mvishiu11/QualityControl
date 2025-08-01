@@ -1,3 +1,5 @@
+// AmplitudePostProcTask.cxx
+
 // Copyright 2019-2020 CERN and copyright holders of ALICE O2.
 // See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
 // All rights not expressly granted are reserved.
@@ -24,6 +26,11 @@
 #include <TH1F.h>
 #include <TH2F.h>
 #include <TMath.h>
+#include <TStyle.h>
+#include <TCanvas.h>
+#include <TPad.h>
+#include <TLegend.h>
+#include <TLatex.h>
 // STL
 #include <limits>
 #include <memory>
@@ -34,6 +41,62 @@ using namespace o2::quality_control_modules::fit;
 
 namespace o2::quality_control_modules::fv0
 {
+
+void AmplitudePostProcTask::configureExpectedGains(const boost::property_tree::ptree& cfg)
+{
+    const char* cfgPath = Form("qc.postprocessing.%s", getID().c_str());
+    const char* cfgCustom = Form("%s.custom", cfgPath);
+    
+    auto cfgGet = [&cfgCustom](const std::string& entry) {
+        return Form("%s.%s", cfgCustom, entry.c_str());
+    };
+    
+    // Clear any existing configurations
+    mExpectedGainConfigs.clear();
+    
+    // Predefined colors and marker styles
+    std::vector<int> colors = {44, 46, 47, 38, 29, 28, 9};
+    std::vector<int> markers = {20, 22, 23, 33, 47, 43, 29};
+    
+    // Try to read list of expected gain configurations
+    try {
+        auto expectedGainArray = cfg.get_child(cfgGet("expectedGainConfigs"));
+        
+        int configIndex = 0;
+        for (const auto& configItem : expectedGainArray) {
+            try {
+                double value = configItem.second.get<double>("value");
+                std::string name = configItem.second.get<std::string>("name");
+                std::string displayName = configItem.second.get<std::string>("displayName", name);
+                
+                int color = colors[configIndex % colors.size()];
+                int marker = markers[configIndex % markers.size()];
+                
+                mExpectedGainConfigs.emplace_back(value, name, displayName, color, marker);
+                configIndex++;
+                
+                ILOG(Info, Support) << "Config [" << configIndex << "]: " << name 
+                                    << " = " << value << " (" << displayName << ")" << ENDM;
+                
+            } catch (const std::exception& e) {
+                ILOG(Warning, Support) << "Failed to parse config item: " << e.what() << ENDM;
+            }
+        }
+    } catch (const std::exception& e) {
+        // Fallback to single expectedGain
+        double singleGain = helper::getConfigFromPropertyTree<double>(cfg, cfgGet("expectedGain"), 15.0);
+        mExpectedGainConfigs.emplace_back(singleGain, "default", "Default", colors[0], markers[0]);
+        ILOG(Info, Support) << "Using single expectedGain fallback: " << singleGain << ENDM;
+    }
+    
+    // Ensure we have at least one configuration
+    if (mExpectedGainConfigs.empty()) {
+        mExpectedGainConfigs.emplace_back(15.0, "fallback", "Fallback", colors[0], markers[0]);
+        ILOG(Warning, Support) << "Using default fallback configuration" << ENDM;
+    }
+    
+    ILOG(Info, Support) << "Configured " << mExpectedGainConfigs.size() << " gain configurations" << ENDM;
+}
 
 void AmplitudePostProcTask::configure(const boost::property_tree::ptree& cfg)
 {
@@ -56,10 +119,14 @@ void AmplitudePostProcTask::configure(const boost::property_tree::ptree& cfg)
     mUseEmpiricalFitting = helper::getConfigFromPropertyTree<bool>(cfg, cfgGet("useEmpiricalFitting"), true);
     mUseFallbackFitting = helper::getConfigFromPropertyTree<bool>(cfg, cfgGet("useFallbackFitting"), true);
     
+    // Configure expected gains (replaces single expectedGain)
+    configureExpectedGains(cfg);
+    
     ILOG(Info, Support) << "AmplitudePostProcTask configured with empirical fitting: " 
                         << (mUseEmpiricalFitting ? "enabled" : "disabled") 
                         << ", fallback: " << (mUseFallbackFitting ? "enabled" : "disabled")
-                        << ", slice fraction: " << mSliceFrac << ENDM;
+                        << ", slice fraction: " << mSliceFrac 
+                        << ", " << mExpectedGainConfigs.size() << " gain configurations" << ENDM;
 }
 
 void AmplitudePostProcTask::reset()
@@ -67,7 +134,7 @@ void AmplitudePostProcTask::reset()
     mMapHistAmpPerChannel.clear();
     mHistAmpAll.reset();
     mHistAmpNormPerChannel.reset();
-    mGraphMPVDiv16.reset();
+    mGraphsMPVPerConfig.clear();
     
     mEmpiricalFitsUsed = 0;
     mFallbackFitsUsed = 0;
@@ -220,6 +287,99 @@ void AmplitudePostProcTask::logFittingStatistics() const
     }
 }
 
+void AmplitudePostProcTask::createGraphsForConfigurations()
+{
+  mGraphsMPVPerConfig.clear();
+
+  for (size_t i = 0; i < mExpectedGainConfigs.size(); ++i) {
+    const auto& cfg = mExpectedGainConfigs[i];
+
+    const std::string graphName  = Form("GaussianSummary/MeanVsChannel_%s", cfg.name.c_str());
+    const std::string graphTitle = Form("FV0: Gaussian Mean vs Channel - %s;Channel ID;#mu (ADC channels)",
+                                        cfg.displayName.c_str());
+
+    auto graph = helper::registerGraph<TGraphErrors>(
+        getObjectsManager(),
+        quality_control::core::PublicationPolicy::ThroughStop,
+        "AP", graphName, graphTitle, sNCHANNELS_PM);
+
+    mGraphsMPVPerConfig.push_back(std::move(graph));  // <— only once
+  }
+
+  applyStyling();
+}
+
+void AmplitudePostProcTask::applyStyling()
+{
+    for (size_t i = 0; i < mGraphsMPVPerConfig.size() && i < mExpectedGainConfigs.size(); ++i) {
+        auto* graph = mGraphsMPVPerConfig[i].get();
+        const auto& config = mExpectedGainConfigs[i];
+        
+        if (!graph) continue;
+        
+        // Set axis limits and ranges
+        graph->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
+        graph->GetYaxis()->SetRangeUser(0.3 * config.value, 1.7 * config.value);
+        
+        // Set marker and line styling
+        graph->SetMarkerStyle(config.markerStyle);
+        graph->SetMarkerSize(1.2);
+        graph->SetMarkerColor(config.color);
+        graph->SetLineColor(config.color);
+        graph->SetLineWidth(2);
+        
+        // Clear and add reference lines
+        graph->GetListOfFunctions()->Clear();
+        
+        // Main reference line (expected value)
+        auto* refLine = new TLine(-0.5, config.value, sNCHANNELS_PM + 0.5, config.value);
+        refLine->SetLineColor(config.color);
+        refLine->SetLineStyle(2);
+        refLine->SetLineWidth(2);
+        graph->GetListOfFunctions()->Add(refLine);
+        
+        // Warning zones (±1 from expected) - yellow-orange
+        auto* warningLineLow = new TLine(-0.5, config.value - 1, sNCHANNELS_PM + 0.5, config.value - 1);
+        auto* warningLineHigh = new TLine(-0.5, config.value + 1, sNCHANNELS_PM + 0.5, config.value + 1);
+        warningLineLow->SetLineColor(kOrange+2);
+        warningLineLow->SetLineStyle(3);
+        warningLineLow->SetLineWidth(2);
+        warningLineHigh->SetLineColor(kOrange+2);
+        warningLineHigh->SetLineStyle(3);
+        warningLineHigh->SetLineWidth(2);
+        graph->GetListOfFunctions()->Add(warningLineLow);
+        graph->GetListOfFunctions()->Add(warningLineHigh);
+        
+        // Error zones (±2 from expected) - red
+        auto* errorLineLow = new TLine(-0.5, config.value - 2, sNCHANNELS_PM + 0.5, config.value - 2);
+        auto* errorLineHigh = new TLine(-0.5, config.value + 2, sNCHANNELS_PM + 0.5, config.value + 2);
+        errorLineLow->SetLineColor(kRed);
+        errorLineLow->SetLineStyle(9);
+        errorLineLow->SetLineWidth(1);
+        errorLineHigh->SetLineColor(kRed);
+        errorLineHigh->SetLineStyle(9);
+        errorLineHigh->SetLineWidth(1);
+        graph->GetListOfFunctions()->Add(errorLineLow);
+        graph->GetListOfFunctions()->Add(errorLineHigh);
+    }
+}
+
+void AmplitudePostProcTask::updateGraphsWithData()
+{
+    for (size_t i = 0; i < mGraphsMPVPerConfig.size(); ++i) {
+        auto* graph = mGraphsMPVPerConfig[i].get();
+        if (!graph) {
+            ILOG(Warning, Support) << "Graph " << i << " is null, skipping" << ENDM;
+            continue;
+        }
+        
+        for (std::size_t ch = 0; ch < sNCHANNELS_PM; ++ch) {
+            graph->SetPoint(ch, mChanX[ch], mMean[ch]);
+            graph->SetPointError(ch, mChanXErr[ch], 0.);
+        }
+    }
+}
+
 void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryRef services)
 {
     ILOG(Info, Support) << "Initialising AmplitudePostProcTask" << ENDM;
@@ -254,16 +414,17 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
             mAmpBins, mAmpMin, mAmpMax);
     }
     
+    // Create graphs for all configurations
+    createGraphsForConfigurations();
+    
     ILOG(Info, Support) << "AmplitudePostProcTask initialized with " << sNCHANNELS_PM 
-                        << " channels and empirical fitting for " << mChannelFitParams.size() 
-                        << " specially-tuned channels" << ENDM;
+                        << " channels and " << mExpectedGainConfigs.size()
+                        << " expected gain configuration(s)" << ENDM;
 }
 
 void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef serviceReg)
 {
     mPostProcHelper.update(trig, serviceReg);
-    
-    constexpr double kScale = 15.0;  // pp scaling factor
     
     auto h2 = mPostProcHelper.template getObject<TH2F>("AmpPerChannel");
     if (!h2) {
@@ -273,8 +434,7 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     }
     
     ILOG(Debug, Support) << "Processing amplitude data with " << h2->GetEntries() 
-                         << " entries using " << (mUseEmpiricalFitting ? "empirical" : "standard") 
-                         << " fitting approach" << ENDM;
+                         << " entries for " << mExpectedGainConfigs.size() << " configurations" << ENDM;
     
     mHistAmpAll->Reset();
     mHistAmpNormPerChannel->Reset();
@@ -339,40 +499,14 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
         mChanXErr[ch] = 0.0;
     }
     
-    // Create or update the summary graph
-    if (!mGraphMPVDiv16) {
-        mGraphMPVDiv16 = helper::registerGraph<TGraphErrors>(
-            getObjectsManager(),
-            quality_control::core::PublicationPolicy::ThroughStop,
-            "AP", "GaussianSummary/MeanVsChannel",
-            "FV0: Scaled Gaussian mean;Channel ID;#mu / scaling factor (collision-dependent)",
-            sNCHANNELS_PM);
-            
-        mGraphMPVDiv16->GetXaxis()->SetLimits(-1, 49);
-        mGraphMPVDiv16->GetYaxis()->SetRangeUser(0., 2.);
-        mGraphMPVDiv16->SetMarkerStyle(21);
-        mGraphMPVDiv16->SetMarkerSize(1.1);
-        mGraphMPVDiv16->SetMarkerColor(kRed);
-        mGraphMPVDiv16->SetLineColor(kBlack);
-        mGraphMPVDiv16->GetListOfFunctions()->Clear();
-        auto* refLine = new TLine(-0.5, 1.0, 48.5, 1.0);
-        refLine->SetLineColor(kBlue);
-        refLine->SetLineStyle(2);
-        refLine->SetLineWidth(2);
-        mGraphMPVDiv16->GetListOfFunctions()->Add(refLine);
-        
-        ILOG(Info, Support) << "Created Gaussian summary graph with reference line" << ENDM;
-    }
-    
-    for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
-        mGraphMPVDiv16->SetPoint(i, mChanX[i], mMean[i] / kScale);
-        mGraphMPVDiv16->SetPointError(i, mChanXErr[i], 0.);
-    }
+    // Update all graphs with the measured data
+    updateGraphsWithData();
     
     logFittingStatistics();
     setTimestampToMOs();
     
-    ILOG(Info, Support) << "AmplitudePostProcTask update completed successfully with empirical fitting" << ENDM;
+    ILOG(Info, Support) << "AmplitudePostProcTask update completed for " 
+                        << mExpectedGainConfigs.size() << " configurations" << ENDM;
 }
 
 void AmplitudePostProcTask::finalize(Trigger, framework::ServiceRegistryRef)
@@ -384,32 +518,26 @@ void AmplitudePostProcTask::finalize(Trigger, framework::ServiceRegistryRef)
         if (hist && hist->GetEntries() > 0) {
             totalChannelsProcessed++;
             totalEntriesProcessed += hist->GetEntries();
-            ILOG(Debug, Support) << "Channel " << ch << " processed " 
-                               << hist->GetEntries() << " entries" << ENDM;
         }
-    }
-    
-    if (mUseEmpiricalFitting) {
-        int customChannels = mChannelFitParams.size();
-        int defaultChannels = totalChannelsProcessed - customChannels;
-        
-        ILOG(Info, Support) << "Empirical fitting summary: " << customChannels 
-                            << " channels with custom parameters, " << defaultChannels 
-                            << " channels using defaults" << ENDM;
     }
     
     logFittingStatistics();
     
-    if (mGraphMPVDiv16) {
-        ILOG(Info, Support) << "Gaussian summary graph contains " 
-                           << mGraphMPVDiv16->GetN() << " points" << ENDM;
+    // Log graph statistics
+    for (size_t i = 0; i < mExpectedGainConfigs.size() && i < mGraphsMPVPerConfig.size(); ++i) {
+        const auto& config = mExpectedGainConfigs[i];
+        if (mGraphsMPVPerConfig[i]) {
+            ILOG(Info, Support) << "Graph '" << config.name << "' has " 
+                               << mGraphsMPVPerConfig[i]->GetN() << " points" << ENDM;
+        } else {
+            ILOG(Warning, Support) << "Graph '" << config.name << "' is null!" << ENDM;
+        }
     }
     
     ILOG(Info, Support) << "AmplitudePostProcTask finalized. Processed " 
                        << totalChannelsProcessed << " channels with " 
-                       << totalEntriesProcessed << " total entries using "
-                       << (mUseEmpiricalFitting ? "empirical" : "standard") 
-                       << " fitting approach." << ENDM;
+                       << totalEntriesProcessed << " entries for " 
+                       << mExpectedGainConfigs.size() << " configurations." << ENDM;
 }
 
 } // namespace o2::quality_control_modules::fv0

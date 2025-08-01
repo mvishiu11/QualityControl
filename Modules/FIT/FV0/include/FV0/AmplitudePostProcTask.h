@@ -1,3 +1,5 @@
+// AmplitudePostProcTask.h
+
 // Copyright 2019-2020 CERN and copyright holders of ALICE O2.
 // See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
 // All rights not expressly granted are reserved.
@@ -25,17 +27,33 @@
 #include <TGraphErrors.h>
 #include <TLine.h>
 #include <TF1.h>
+#include <TLegend.h>
 // STL
 #include <array>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 class TH1F;
 class TH2F;
 
 namespace o2::quality_control_modules::fv0
 {
+
+// Expected gain configuration for different beam types/conditions
+struct ExpectedGainConfig {
+    double value;              ///< Expected gain value
+    std::string name;          ///< Short name for internal use (e.g., "pp", "PbPb", "OO")
+    std::string displayName;   ///< Display name for plots (e.g., "pp collisions", "Pb-Pb collisions")
+    int color;                 ///< ROOT color for this configuration
+    int markerStyle;           ///< ROOT marker style
+    
+    ExpectedGainConfig() : value(15.0), name("default"), displayName("Default"), color(kRed), markerStyle(20) {}
+    
+    ExpectedGainConfig(double val, const std::string& n, const std::string& dn, int col = kRed, int marker = 20)
+        : value(val), name(n), displayName(dn), color(col), markerStyle(marker) {}
+};
 
 // Empirical fitting parameters
 struct ChannelFitParams {
@@ -112,6 +130,12 @@ private:
                                                 int peakBin, TH1D* histogram) const;
     void logFittingStatistics() const;
     
+    // Expected gain configuration methods
+    void configureExpectedGains(const boost::property_tree::ptree& config);
+    void createGraphsForConfigurations();
+    void updateGraphsWithData();
+    void applyStyling();
+    
     // Configuration & constants
     static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
     
@@ -122,6 +146,9 @@ private:
     double mSliceFrac{0.25};              ///< Fallback fit window half-width (fraction of peak)
     bool mUseEmpiricalFitting{true};      ///< Enable empirical fitting parameters
     bool mUseFallbackFitting{true};       ///< Enable fallback to fractional window
+    
+    // Expected gain configurations (replaces single mExpectedGain)
+    std::vector<ExpectedGainConfig> mExpectedGainConfigs;
     
     // QC managed objects
     std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
@@ -134,8 +161,8 @@ private:
     std::array<double, sNCHANNELS_PM> mChanX{};
     std::array<double, sNCHANNELS_PM> mChanXErr{};
     
-    // Gaussian error graph
-    std::unique_ptr<TGraphErrors> mGraphMPVDiv16;
+    // Multiple Gaussian error graphs (one per configuration)
+    std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
     
     // Empirical fitting data structures
     std::map<unsigned int, ChannelFitParams> mChannelFitParams;  ///< Channel-specific fitting parameters

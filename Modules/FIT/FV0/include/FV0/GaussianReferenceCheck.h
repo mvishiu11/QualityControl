@@ -24,7 +24,7 @@
 namespace o2::quality_control_modules::fv0
 {
 
-/// \brief Checks if scaled Gaussian means are within acceptable range of reference value (1.0)
+/// \brief Checks if scaled Gaussian means are within acceptable range of reference value
 /// 
 /// This check analyzes the GaussianSummary/MeanVsChannel graph to ensure that:
 /// 1. Error bars of measurement points overlap with the reference line at y=1.0
