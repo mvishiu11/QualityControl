@@ -309,7 +309,20 @@ std::string TrendingTask::deduceGraphLegendOptions(const TrendingTaskConfig::Gra
 TCanvas* TrendingTask::drawPlot(const TrendingTaskConfig::Plot& plotConfig)
 {
   auto* c = new TCanvas();
-  auto* legend = new TLegend(0.3, 0.2);
+
+  TLegend* legend = nullptr;
+  if (plotConfig.legend.enabled) {
+    legend = new TLegend(plotConfig.legend.x1, plotConfig.legend.y1,
+                        plotConfig.legend.x2, plotConfig.legend.y2,
+                        /*header=*/nullptr, /*option=*/"NDC");
+    if (plotConfig.legend.nColumns > 0) legend->SetNColumns(plotConfig.legend.nColumns);
+  } else {
+    legend = new TLegend(0.30, 0.20, 0.55, 0.35, nullptr, "NDC");
+  }
+  legend->SetBorderSize(0);
+  legend->SetFillStyle(0);
+  legend->SetTextSize(0.03);
+  legend->SetMargin(0.15);
 
   if (plotConfig.colorPalette != 0) {
     // this will work just once until we bump ROOT to a version which contains this commit:

@@ -51,11 +51,21 @@ TrendingTaskConfig::TrendingTaskConfig(std::string id, const boost::property_tre
                          plotConfig.get<std::string>("option", ""),
                          plotConfig.get<std::string>("graphErrors", "") });
     }
+
+    LegendConfig leg;
+    leg.enabled  = plotConfig.get<bool>("legend.enabled", false);
+    leg.nColumns = plotConfig.get<int>("legend.nColumns", 1);
+    leg.x1       = plotConfig.get<float>("legend.x1", 0.30f);
+    leg.y1       = plotConfig.get<float>("legend.y1", 0.20f);
+    leg.x2       = plotConfig.get<float>("legend.x2", 0.55f);
+    leg.y2       = plotConfig.get<float>("legend.y2", 0.35f);
+
     plots.push_back({ plotConfig.get<std::string>("name"),
                       plotConfig.get<std::string>("title", ""),
                       plotConfig.get<std::string>("graphAxisLabel", ""),
                       plotConfig.get<std::string>("graphYRange", ""),
                       plotConfig.get<int>("colorPalette", 0),
+                      leg,
                       graphs });
   }
 

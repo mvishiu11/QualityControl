@@ -55,7 +55,7 @@
           "leftSliceFrac": "0.15",
           "rightSliceFrac": "0.15",
           "minBinEntriesForWeight": "1",
-          "expectedGain": "14",
+          "expectedGain": "1",
           "trendEnabled": "true",
           "trendScalarsFolder": "TrendsScalars",
           "cycleDurationMoName": "CycleDurationNTF",
@@ -74,6 +74,7 @@
         "detectorName": "FT0",
 
         "resumeTrend": "true",
+        "producePlotsOnUpdate": "true",
         "trendingTimestamp": "validFrom",
 
         "dataSources": [
@@ -87,15 +88,45 @@
         ],
 
         "plots": [
-          { "name": "trend_mu_AInner", "title": "A-inner μ vs time;time;μ [ADC]",
-            "varexp": "AInner.mean:time", "selection": "", "option": "*L" },
-          { "name": "trend_mu_AOuter", "title": "A-outer μ vs time;time;μ [ADC]",
-            "varexp": "AOuter.mean:time", "selection": "", "option": "*L" },
-          { "name": "trend_mu_C",      "title": "C-side μ vs time;time;μ [ADC]",
-            "varexp": "C.mean:time",    "selection": "", "option": "*L" },
-          { "name": "trend_mu_All",    "title": "All μ vs time;time;μ [ADC]",
-            "varexp": "All.mean:time",  "selection": "", "option": "*L" }
-        ],
+            {
+              "name": "trend_mu_adc_mip",
+              "title": "ADC/MIP trends for all groupings",
+              "graphAxisLabel": "ADC/MIP:time",
+              "graphYRange": "13:14.5",
+              "colorPalette": "90",
+              "legend": { "enabled": true, "x1": 0.70, "y1": 0.70, "x2": 0.93, "y2": 0.90, "nColumns": 1 },
+              "graphs": [
+                {
+                  "title": "All trend",
+                  "varexp": "All.mean:time",
+                  "selection": "",
+                  "option": "*LP PLC PMC",
+                  "errors": "0:All.stddev"
+                },
+                {
+                  "title": "AInner trend",
+                  "varexp": "AInner.mean:time",
+                  "selection": "",
+                  "option": "*LP PLC PMC",
+                  "errors": "0:AInner.stddev"
+                },
+                {
+                  "title": "AOuter trend",
+                  "varexp": "AOuter.mean:time",
+                  "selection": "",
+                  "option": "*LP PLC PMC",
+                  "errors": "0:AOuter.stddev"
+                },
+                {
+                  "title": "C trend",
+                  "varexp": "C.mean:time",
+                  "selection": "",
+                  "option": "*LP PLC PMC",
+                  "errors": "0:C.stddev"
+                }
+              ]
+            }
+          ],
 
         "initTrigger":   ["userorcontrol"],
         "updateTrigger": ["newobject:qcdb:FT0/MO/AmplitudeAnalysisV2/TrendsScalars/All"],

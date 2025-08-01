@@ -42,6 +42,13 @@ struct TrendingTaskConfig : PostProcessingConfig {
     std::string errors;
   };
 
+  // legend configuration
+  struct LegendConfig {
+    bool  enabled{false};
+    int   nColumns{1};
+    float x1{0.30f}, y1{0.20f}, x2{0.55f}, y2{0.35f}; // NDC coords
+  };
+
   // this corresponds to one canvas which can include multiple graphs
   struct Plot {
     std::string name;
@@ -49,6 +56,7 @@ struct TrendingTaskConfig : PostProcessingConfig {
     std::string graphAxisLabel;
     std::string graphYRange;
     int colorPalette = 0;
+    LegendConfig legend;
     std::vector<Graph> graphs;
   };
 
