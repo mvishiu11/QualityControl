@@ -92,37 +92,36 @@
               "name": "trend_mu_adc_mip",
               "title": "ADC/MIP trends for all groupings",
               "graphAxisLabel": "ADC/MIP:time",
-              "graphYRange": "13:14.5",
-              "colorPalette": "90",
+              "graphYRange": "12:16",
               "legend": { "enabled": true, "x1": 0.70, "y1": 0.70, "x2": 0.93, "y2": 0.90, "nColumns": 1 },
               "graphs": [
                 {
                   "title": "All trend",
                   "varexp": "All.mean:time",
                   "selection": "",
-                  "option": "*LP PLC PMC",
-                  "errors": "0:All.stddev"
+                  "option": "*LP",
+                  "style": { "lineColor": 38, "markerColor": 4, "markerStyle": 20, "lineWidth": 2 }
                 },
                 {
                   "title": "AInner trend",
                   "varexp": "AInner.mean:time",
                   "selection": "",
-                  "option": "*LP PLC PMC",
-                  "errors": "0:AInner.stddev"
+                  "option": "*LP",
+                  "style": { "lineColor": 8, "markerColor": 3, "markerStyle": 30, "lineWidth": 2 }
                 },
                 {
                   "title": "AOuter trend",
                   "varexp": "AOuter.mean:time",
                   "selection": "",
-                  "option": "*LP PLC PMC",
-                  "errors": "0:AOuter.stddev"
+                  "option": "*LP",
+                  "style": { "lineColor": 31, "markerColor": 30, "markerStyle": 23, "lineWidth": 2 }
                 },
                 {
                   "title": "C trend",
                   "varexp": "C.mean:time",
                   "selection": "",
-                  "option": "*LP PLC PMC",
-                  "errors": "0:C.stddev"
+                  "option": "*LP",
+                  "style": { "lineColor": 41, "markerColor": 5, "markerStyle": 33, "lineWidth": 2 }
                 }
               ]
             }
