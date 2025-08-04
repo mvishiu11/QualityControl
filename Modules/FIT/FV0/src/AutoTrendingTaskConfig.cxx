@@ -129,14 +129,14 @@ void AutoTrendingTaskConfig::generatePerRingPlots(const AutoTrendingConfig& ac,
     // Nested under beam in the CCDB viewer
     if (ring < 4) {
       p.name  = beam.name + "/ring" + std::to_string(ring + 1) + "_trend";
-      p.title = "FV0 Ring " + std::to_string(ring + 1) + " — " + beam.displayName;
+      p.title = "FV0 Ring " + std::to_string(ring + 1) + ": " + beam.displayName;
     } else {
       const int sub = ring - 3; // 1,2 for ring 5
       p.name  = beam.name + "/ring5" + std::to_string(sub) + "_trend";
-      p.title = "FV0 Ring 5." + std::to_string(sub) + " — " + beam.displayName;
+      p.title = "FV0 Ring 5." + std::to_string(sub) + ": " + beam.displayName;
     }
 
-    p.graphAxisLabel = "Gain (ADC/MIP):time";
+    p.graphAxisLabel = "MIP ADC(ch):Time";
     p.graphYRange    = yRangeFromGain(beam.expectedGain);
     p.legend = createLegend(0.75f, 0.15f, 0.93f, 0.28f,
       std::max(1, ac.plotConfig.legendColumns), true);
@@ -175,8 +175,8 @@ void AutoTrendingTaskConfig::generateAllChannelsPlot(const AutoTrendingConfig& a
 {
   TT::Plot p;
   p.name           = beam.name + "/all_channels";
-  p.title          = "FV0 All Channels — " + beam.displayName;
-  p.graphAxisLabel = "Gain (ADC/MIP):time";
+  p.title          = "FV0 All Channels: " + beam.displayName;
+  p.graphAxisLabel = "MIP ADC(ch):Time";
   p.graphYRange    = yRangeFromGain(beam.expectedGain);
   p.legend = createLegend(0.15f, 0.15f, 0.90f, 0.30f, 8, true);
 
