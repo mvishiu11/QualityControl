@@ -138,7 +138,7 @@ void AutoTrendingTaskConfig::generatePerRingPlots(const AutoTrendingConfig& ac,
 
     p.graphAxisLabel = "Gain (ADC/MIP):time";
     p.graphYRange    = yRangeFromGain(beam.expectedGain);
-    p.legend = createLegend(0.70f, 0.10f, 0.93f, 0.28f,
+    p.legend = createLegend(0.75f, 0.15f, 0.93f, 0.28f,
       std::max(1, ac.plotConfig.legendColumns), true);
 
     // Base ring color; channels get related shades via offsets.
@@ -178,7 +178,7 @@ void AutoTrendingTaskConfig::generateAllChannelsPlot(const AutoTrendingConfig& a
   p.title          = "FV0 All Channels — " + beam.displayName;
   p.graphAxisLabel = "Gain (ADC/MIP):time";
   p.graphYRange    = yRangeFromGain(beam.expectedGain);
-  p.legend = createLegend(0.08f, 0.08f, 0.92f, 0.26f, 8, true);
+  p.legend = createLegend(0.15f, 0.15f, 0.90f, 0.30f, 8, true);
 
   const int rings = (ac.channelConfig.totalChannels + ac.channelConfig.channelsPerRing - 1) /
                     ac.channelConfig.channelsPerRing;

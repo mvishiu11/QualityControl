@@ -89,7 +89,7 @@
           "userorcontrol"
         ]
       },
-      "FV0AutoAmplitudeTrendingTask": {
+      "FV0AmplitudeTrending": {
         "active": "true",
         "className": "o2::quality_control_modules::fv0::AutoTrendingTask",
         "moduleName": "QcCommon",
