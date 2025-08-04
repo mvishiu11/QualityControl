@@ -1,4 +1,4 @@
-// AmplitudePostProcTask.cxx
+// AmplitudePostProcTask.h
 
 // Copyright 2019-2020 CERN and copyright holders of ALICE O2.
 // See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
@@ -11,533 +11,180 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 ///
-/// \file   AmplitudePostProcTask.cxx
+/// \file   AmplitudePostProcTask.h
 /// \author Jakub Muszyński jakub.milosz.muszynski@cern.ch
 /// \brief  Post-processing task for FV0 amplitude analysis per channel
 ///
 
-// O2 QC / framework
-#include "FV0/AmplitudePostProcTask.h"
-#include "QualityControl/QcInfoLogger.h"
-#include "FITCommon/HelperHist.h"
-#include "FITCommon/HelperGraph.h" 
-#include "FITCommon/HelperCommon.h"
-// ROOT
-#include <TH1F.h>
-#include <TH2F.h>
-#include <TMath.h>
-#include <TStyle.h>
-#include <TCanvas.h>
-#include <TPad.h>
-#include <TLegend.h>
-#include <TLatex.h>
-// STL
-#include <limits>
-#include <memory>
-#include <sstream>
+#ifndef QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H
+#define QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H
 
-using namespace o2::quality_control::postprocessing;
-using namespace o2::quality_control_modules::fit;
+// O2 QC / framework
+#include "QualityControl/PostProcessingInterface.h"
+#include "FV0Base/Constants.h"
+#include "FITCommon/PostProcHelper.h"
+// ROOT
+#include <TGraphErrors.h>
+#include <TLine.h>
+#include <TF1.h>
+#include <TLegend.h>
+// STL
+#include <array>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+class TH1F;
+class TH2F;
 
 namespace o2::quality_control_modules::fv0
 {
 
-void AmplitudePostProcTask::configureExpectedGains(const boost::property_tree::ptree& cfg)
+// Expected gain configuration for different beam types/conditions
+struct ExpectedGainConfig {
+    double value;              ///< Expected gain value
+    std::string name;          ///< Short name for internal use (e.g., "pp", "PbPb", "OO")
+    std::string displayName;   ///< Display name for plots (e.g., "pp collisions", "Pb-Pb collisions")
+    int color;                 ///< ROOT color for this configuration
+    int markerStyle;           ///< ROOT marker style
+    
+    ExpectedGainConfig() : value(15.0), name("default"), displayName("Default"), color(kRed), markerStyle(20) {}
+    
+    ExpectedGainConfig(double val, const std::string& n, const std::string& dn, int col = kRed, int marker = 20)
+        : value(val), name(n), displayName(dn), color(col), markerStyle(marker) {}
+};
+
+// Empirical fitting parameters
+struct ChannelFitParams {
+    double leftSliceFrac;   ///< Left slice fraction (replaces mSliceFrac for left side)
+    double rightSliceFrac;  ///< Right slice fraction (replaces mSliceFrac for right side)
+    bool useRebin;          ///< Whether to rebin histogram for this channel
+    int rebinFactor;        ///< Rebin factor if rebinning is enabled
+    std::string label;      ///< Human-readable label for debugging and logging
+    
+    /// Default constructor with fallback parameters (All rings params)
+    ChannelFitParams() 
+        : leftSliceFrac(0.28), rightSliceFrac(0.20), 
+          useRebin(false), rebinFactor(1), label("default") {}
+    
+    /// Constructor with all parameters for custom channel configurations
+    ChannelFitParams(double leftFrac, double rightFrac, 
+                     bool rebin = false, int rebinFac = 1, const std::string& lbl = "custom")
+        : leftSliceFrac(leftFrac), rightSliceFrac(rightFrac),
+          useRebin(rebin), rebinFactor(rebinFac), label(lbl) {}
+};
+
+/// Detector geometry mapping for FV0
+/// These enums help translate between linear channel numbers and physical detector positions
+enum class FV0Ring { R1 = 0, R2 = 1, R3 = 2, R4 = 3, R51 = 4, R52 = 5 };
+enum class FV0Sector { A = 0, B = 1, C = 2, D = 3, E = 4, F = 5, G = 6, H = 7 };
+
+/// Helper structure to represent detector position
+struct DetectorPosition {
+    FV0Ring ring;
+    FV0Sector sector;
+    
+    /// Default constructor required for ROOT serialization
+    /// Initializes to Ring R1, Sector A as a safe default
+    DetectorPosition() : ring(FV0Ring::R1), sector(FV0Sector::A) {}
+    
+    /// Constructor with explicit ring and sector specification
+    DetectorPosition(FV0Ring r, FV0Sector s) : ring(r), sector(s) {}
+    
+    /// Generate human-readable string for debugging and logging
+    /// Example output: "D_R51" for Ring 51, Sector D
+    std::string toString() const {
+        const char* ringNames[] = {"R1", "R2", "R3", "R4", "R51", "R52"};
+        const char* sectorNames[] = {"A", "B", "C", "D", "E", "F", "G", "H"};
+        return std::string(sectorNames[static_cast<int>(sector)]) + "_" + 
+               std::string(ringNames[static_cast<int>(ring)]);
+    }
+};
+
+class AmplitudePostProcTask final : public quality_control::postprocessing::PostProcessingInterface
 {
-    const char* cfgPath = Form("qc.postprocessing.%s", getID().c_str());
-    const char* cfgCustom = Form("%s.custom", cfgPath);
+public:
+    AmplitudePostProcTask() = default;
+    ~AmplitudePostProcTask() override = default;
     
-    auto cfgGet = [&cfgCustom](const std::string& entry) {
-        return Form("%s.%s", cfgCustom, entry.c_str());
-    };
-    
-    // Clear any existing configurations
-    mExpectedGainConfigs.clear();
-    
-    // Predefined colors and marker styles
-    std::vector<int> colors = {44, 46, 47, 38, 29, 28, 9};
-    std::vector<int> markers = {20, 22, 23, 33, 47, 43, 29};
-    
-    // Try to read list of expected gain configurations
-    try {
-        auto expectedGainArray = cfg.get_child(cfgGet("expectedGainConfigs"));
-        
-        int configIndex = 0;
-        for (const auto& configItem : expectedGainArray) {
-            try {
-                double value = configItem.second.get<double>("value");
-                std::string name = configItem.second.get<std::string>("name");
-                std::string displayName = configItem.second.get<std::string>("displayName", name);
-                
-                int color = colors[configIndex % colors.size()];
-                int marker = markers[configIndex % markers.size()];
-                
-                mExpectedGainConfigs.emplace_back(value, name, displayName, color, marker);
-                configIndex++;
-                
-                ILOG(Info, Support) << "Config [" << configIndex << "]: " << name 
-                                    << " = " << value << " (" << displayName << ")" << ENDM;
-                
-            } catch (const std::exception& e) {
-                ILOG(Warning, Support) << "Failed to parse config item: " << e.what() << ENDM;
-            }
-        }
-    } catch (const std::exception& e) {
-        // Fallback to single expectedGain
-        double singleGain = helper::getConfigFromPropertyTree<double>(cfg, cfgGet("expectedGain"), 15.0);
-        mExpectedGainConfigs.emplace_back(singleGain, "default", "Default", colors[0], markers[0]);
-        ILOG(Info, Support) << "Using single expectedGain fallback: " << singleGain << ENDM;
-    }
-    
-    // Ensure we have at least one configuration
-    if (mExpectedGainConfigs.empty()) {
-        mExpectedGainConfigs.emplace_back(15.0, "fallback", "Fallback", colors[0], markers[0]);
-        ILOG(Warning, Support) << "Using default fallback configuration" << ENDM;
-    }
-    
-    ILOG(Info, Support) << "Configured " << mExpectedGainConfigs.size() << " gain configurations" << ENDM;
-}
+    void configure(const boost::property_tree::ptree& config) override;
+    void initialize(quality_control::postprocessing::Trigger trigger,
+                   framework::ServiceRegistryRef services) override;
+    void update(quality_control::postprocessing::Trigger trigger,
+               framework::ServiceRegistryRef services) override;
+    void finalize(quality_control::postprocessing::Trigger trigger,
+                 framework::ServiceRegistryRef services) override;
 
-void AmplitudePostProcTask::configure(const boost::property_tree::ptree& cfg)
-{
-    const char* cfgPath = Form("qc.postprocessing.%s", getID().c_str());
-    const char* cfgCustom = Form("%s.custom", cfgPath);
+private:
+    o2::quality_control_modules::fit::PostProcHelper mPostProcHelper;
     
-    mPostProcHelper.configure(cfg, cfgPath, "FV0");
+    void reset();
+    void setTimestampToMOs();
     
-    auto cfgGet = [&cfgCustom](const std::string& entry) {
-        return Form("%s.%s", cfgCustom, entry.c_str());
-    };
+    // Empirical fitting
+    void initializeEmpiricalParameters();
+    DetectorPosition getChannelPosition(unsigned int channel) const;
+    ChannelFitParams getChannelFitParams(unsigned int channel) const;
+    std::pair<double, double> calculateFitWindow(unsigned int channel, double peak, 
+                                                int peakBin, TH1D* histogram) const;
+    void logFittingStatistics() const;
     
-    // Basic histogram configuration
-    mAmpMin = helper::getConfigFromPropertyTree<int>(cfg, cfgGet("ampMin"), -100);
-    mAmpMax = helper::getConfigFromPropertyTree<int>(cfg, cfgGet("ampMax"), 4100);
-    mAmpBins = helper::getConfigFromPropertyTree<int>(cfg, cfgGet("ampBins"), 4200);
-    mSliceFrac = helper::getConfigFromPropertyTree<double>(cfg, cfgGet("sliceFrac"), 0.25);
-    
-    // Empirical fitting configuration
-    mUseEmpiricalFitting = helper::getConfigFromPropertyTree<bool>(cfg, cfgGet("useEmpiricalFitting"), true);
-    mUseFallbackFitting = helper::getConfigFromPropertyTree<bool>(cfg, cfgGet("useFallbackFitting"), true);
-    
-    // Configure expected gains (replaces single expectedGain)
-    configureExpectedGains(cfg);
-    
-    ILOG(Info, Support) << "AmplitudePostProcTask configured with empirical fitting: " 
-                        << (mUseEmpiricalFitting ? "enabled" : "disabled") 
-                        << ", fallback: " << (mUseFallbackFitting ? "enabled" : "disabled")
-                        << ", slice fraction: " << mSliceFrac 
-                        << ", " << mExpectedGainConfigs.size() << " gain configurations" << ENDM;
-}
+    // Expected gain configuration methods
+    void configureExpectedGains(const boost::property_tree::ptree& config);
+    void createGraphsForConfigurations();
+    void updateGraphsWithData();
+    void applyStyling();
 
-void AmplitudePostProcTask::reset()
-{
-    mMapHistAmpPerChannel.clear();
-    mHistAmpAll.reset();
-    mHistAmpNormPerChannel.reset();
-    mGraphsMPVPerConfig.clear();
+    // Trending
+    void initializeTrending();
+    void updateTrendingData();
+    void createTrendingScalars();
     
-    mEmpiricalFitsUsed = 0;
-    mFallbackFitsUsed = 0;
-    mFailedFits = 0;
-}
-
-void AmplitudePostProcTask::setTimestampToMOs()
-{
-    for (int iObj = 0; iObj < getObjectsManager()->getNumberPublishedObjects(); iObj++) {
-        auto mo = getObjectsManager()->getMonitorObject(iObj);
-        mo->addOrUpdateMetadata(mPostProcHelper.mTimestampMetaField, 
-                               std::to_string(mPostProcHelper.mTimestampAnchor));
-    }
-}
-
-void AmplitudePostProcTask::initializeEmpiricalParameters()
-{
-    ILOG(Info, Support) << "Initializing empirical slice fractions based on detector experience" << ENDM;
+    // Configuration & constants
+    static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
     
-    // Initialize default slice fractions
-    mDefaultFitParams = ChannelFitParams(0.28, 0.20, false, 1, "default_all_rings");
+    // Configuration parameters
+    int mAmpMin{-100};                    ///< Histogram ADC min
+    int mAmpMax{4100};                    ///< Histogram ADC max
+    int mAmpBins{4200};                   ///< Histogram bins
+    double mSliceFrac{0.25};              ///< Fallback fit window half-width (fraction of peak)
+    bool mUseEmpiricalFitting{true};      ///< Enable empirical fitting parameters
+    bool mUseFallbackFitting{true};       ///< Enable fallback to fractional window
+    bool mTrendEnabled{false};            ///< Enable trending functionality
+    std::string mTrendScalarsFolder{"TrendsScalars"}; ///< Folder name for trending scalars
     
-    // Create the channel mapping for detector position identification
-    for (unsigned int ch = 0; ch < sNCHANNELS_PM && ch < 48; ++ch) {
-        FV0Ring ring = static_cast<FV0Ring>(ch / 8);
-        FV0Sector sector = static_cast<FV0Sector>(ch % 8);
-        mChannelMapping[ch] = DetectorPosition(ring, sector);
-    }
+    // Expected gain configurations (replaces single mExpectedGain)
+    std::vector<ExpectedGainConfig> mExpectedGainConfigs;
     
-    // Ring R2 specific slice fractions
-    // Channel 13 = Ring R2 (8-15), Sector F (+5) = 8+5 = 13
-    mChannelFitParams[13] = ChannelFitParams(0.24, 0.28, false, 1, "F_R2");
+    // QC managed objects
+    std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
+    std::unique_ptr<TH1F> mHistAmpAll;
+    std::unique_ptr<TH1F> mHistAmpNormPerChannel;
     
-    // Ring R4 specific slice fractions
-    // Channel 29 = Ring R4 (24-31), Sector F (+5) = 24+5 = 29
-    mChannelFitParams[29] = ChannelFitParams(0.24, 0.24, false, 1, "F_R4");
-    // Channel 31 = Ring R4 (24-31), Sector H (+7) = 24+7 = 31
-    mChannelFitParams[31] = ChannelFitParams(0.28, 0.25, false, 1, "H_R4");
+    // Gaussian fit results
+    std::array<double, sNCHANNELS_PM> mMean{};
+    std::array<double, sNCHANNELS_PM> mSigma{};
+    std::array<double, sNCHANNELS_PM> mChanX{};
+    std::array<double, sNCHANNELS_PM> mChanXErr{};
     
-    // Special case for all outer ring channels (32-47)
-    for (unsigned int ch = 32; ch < 48; ++ch) {
-        mChannelFitParams[ch] = ChannelFitParams(0.36, 0.36, false, 1, "Ring5x_default");
-    }
+    // Multiple Gaussian error graphs (one per configuration)
+    std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
     
-    // Ring R51 specific overrides for channels with individual calibration
-    mChannelFitParams[33] = ChannelFitParams(0.35, 0.45, false, 1, "B_R51"); // Ring R51, Sector B
-    mChannelFitParams[34] = ChannelFitParams(0.26, 0.35, false, 1, "C_R51"); // Ring R51, Sector C
-    mChannelFitParams[35] = ChannelFitParams(0.40, 0.45, false, 1, "D_R51"); // Ring R51, Sector D
-    mChannelFitParams[36] = ChannelFitParams(0.36, 0.36, false, 1, "E_R51"); // Ring R51, Sector E
-    mChannelFitParams[39] = ChannelFitParams(0.30, 0.40, false, 1, "H_R51"); // Ring R51, Sector H
+    // Trending scalar histograms (one per configuration)
+    std::vector<std::unique_ptr<TH1F>> mTrendingScalars;
     
-        // Ring R52 specific overrides
-    mChannelFitParams[40] = ChannelFitParams(0.30, 0.30, false, 1, "A_R52"); // Ring R52, Sector A
-    mChannelFitParams[42] = ChannelFitParams(0.36, 0.36, false, 1, "C_R52"); // Ring R52, Sector C
-    mChannelFitParams[43] = ChannelFitParams(0.36, 0.36, false, 1, "D_R52"); // Ring R52, Sector D
-    mChannelFitParams[44] = ChannelFitParams(0.30, 0.30, false, 1, "E_R52"); // Ring R52, Sector E
-    mChannelFitParams[45] = ChannelFitParams(0.36, 0.36, false, 1, "F_R52"); // Ring R52, Sector F
-    mChannelFitParams[46] = ChannelFitParams(0.40, 0.40, false, 1, "G_R52"); // Ring R52, Sector G
-    mChannelFitParams[47] = ChannelFitParams(0.34, 0.38, false, 1, "H_R52"); // Ring R52, Sector H
+    // Empirical fitting data structures
+    std::map<unsigned int, ChannelFitParams> mChannelFitParams;  ///< Channel-specific fitting parameters
+    ChannelFitParams mDefaultFitParams;                          ///< Default parameters for unmapped channels
+    std::map<unsigned int, DetectorPosition> mChannelMapping;    ///< Maps channel numbers to detector positions
     
-    ILOG(Info, Support) << "Initialized empirical slice fractions for " 
-                        << mChannelFitParams.size() << " channels with custom settings" << ENDM;
-}
-
-DetectorPosition AmplitudePostProcTask::getChannelPosition(unsigned int channel) const
-{
-    // Look up the detector position for this channel number
-    auto it = mChannelMapping.find(channel);
-    if (it != mChannelMapping.end()) {
-        return it->second;
-    }
-    
-    // Fallback calculation if channel not found in mapping
-    FV0Ring ring = static_cast<FV0Ring>(std::min(channel / 8, 5U));  // Clamp to valid ring range
-    FV0Sector sector = static_cast<FV0Sector>(channel % 8);
-    
-    ILOG(Debug, Support) << "Channel " << channel << " not found in mapping, using calculated position" << ENDM;
-    return DetectorPosition(ring, sector);
-}
-
-ChannelFitParams AmplitudePostProcTask::getChannelFitParams(unsigned int channel) const
-{
-    // Check if we have specific empirical parameters for this channel
-    auto it = mChannelFitParams.find(channel);
-    if (it != mChannelFitParams.end()) {
-        return it->second;
-    }
-    
-    return mDefaultFitParams;
-}
-
-std::pair<double, double> AmplitudePostProcTask::calculateFitWindow(unsigned int channel, 
-                                                                   double peak, int peakBin, 
-                                                                   TH1D* histogram) const
-{
-    // Fallback to the original fractional window approach
-    if (!mUseEmpiricalFitting) {
-        double xmin = std::max<double>(peak - mSliceFrac * std::abs(peak), mAmpMin);
-        double xmax = std::min<double>(peak + mSliceFrac * std::abs(peak), mAmpMax);
-        mFallbackFitsUsed++;
-        return std::make_pair(xmin, xmax);
-    }
-    
-    // Get the empirical slice fractions for this specific channel
-    ChannelFitParams params = getChannelFitParams(channel);
-    DetectorPosition pos = getChannelPosition(channel);
-    
-    double xmin = std::max<double>(peak - params.leftSliceFrac * std::abs(peak), 
-                                   static_cast<double>(mAmpMin));
-    double xmax = std::min<double>(peak + params.rightSliceFrac * std::abs(peak), 
-                                   static_cast<double>(mAmpMax));
-    
-    // Basic sanity check: ensure the window is mathematically valid
-    if (xmax <= xmin) {
-        if (mUseFallbackFitting) {
-            ILOG(Warning, Support) << "Invalid empirical window for channel " 
-                                   << channel << " (" << pos.toString() 
-                                   << "), falling back to fractional window" << ENDM;
-            
-            double fallback_xmin = std::max<double>(peak - mSliceFrac * std::abs(peak), mAmpMin);
-            double fallback_xmax = std::min<double>(peak + mSliceFrac * std::abs(peak), mAmpMax);
-            mFallbackFitsUsed++;
-            return std::make_pair(fallback_xmin, fallback_xmax);
-        } else {
-            ILOG(Error, Support) << "Invalid empirical window for channel " << channel 
-                                << ", but fallback is disabled" << ENDM;
-            mFailedFits++;
-        }
-    }
-    
-    ILOG(Debug, Support) << "Channel " << channel << " (" << pos.toString() 
-                         << "): window [" << xmin << ", " << xmax 
-                         << "] using slice fractions [" << params.leftSliceFrac 
-                         << ", " << params.rightSliceFrac << "]" << ENDM;
-    
-    mEmpiricalFitsUsed++;
-    return std::make_pair(xmin, xmax);
-}
-
-void AmplitudePostProcTask::logFittingStatistics() const
-{
-    int totalFits = mEmpiricalFitsUsed + mFallbackFitsUsed + mFailedFits;
-    if (totalFits > 0) {
-        ILOG(Info, Support) << "Fitting statistics: " << mEmpiricalFitsUsed << " empirical fits ("
-                           << (100.0 * mEmpiricalFitsUsed / totalFits) << "%), "
-                           << mFallbackFitsUsed << " fallback fits ("
-                           << (100.0 * mFallbackFitsUsed / totalFits) << "%), "
-                           << mFailedFits << " failed fits ("
-                           << (100.0 * mFailedFits / totalFits) << "%)" << ENDM;
-    }
-}
-
-void AmplitudePostProcTask::createGraphsForConfigurations()
-{
-  mGraphsMPVPerConfig.clear();
-
-  for (size_t i = 0; i < mExpectedGainConfigs.size(); ++i) {
-    const auto& cfg = mExpectedGainConfigs[i];
-
-    const std::string graphName  = Form("GaussianSummary/MeanVsChannel_%s", cfg.name.c_str());
-    const std::string graphTitle = Form("FV0: Gaussian Mean vs Channel - %s;Channel ID;#mu (ADC channels)",
-                                        cfg.displayName.c_str());
-
-    auto graph = helper::registerGraph<TGraphErrors>(
-        getObjectsManager(),
-        quality_control::core::PublicationPolicy::ThroughStop,
-        "AP", graphName, graphTitle, sNCHANNELS_PM);
-
-    mGraphsMPVPerConfig.push_back(std::move(graph));  // <— only once
-  }
-
-  applyStyling();
-}
-
-void AmplitudePostProcTask::applyStyling()
-{
-    for (size_t i = 0; i < mGraphsMPVPerConfig.size() && i < mExpectedGainConfigs.size(); ++i) {
-        auto* graph = mGraphsMPVPerConfig[i].get();
-        const auto& config = mExpectedGainConfigs[i];
-        
-        if (!graph) continue;
-        
-        // Set axis limits and ranges
-        graph->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
-        graph->GetYaxis()->SetRangeUser(0.3 * config.value, 1.7 * config.value);
-        
-        // Set marker and line styling
-        graph->SetMarkerStyle(config.markerStyle);
-        graph->SetMarkerSize(1.2);
-        graph->SetMarkerColor(config.color);
-        graph->SetLineColor(config.color);
-        graph->SetLineWidth(2);
-        
-        // Clear and add reference lines
-        graph->GetListOfFunctions()->Clear();
-        
-        // Main reference line (expected value)
-        auto* refLine = new TLine(-0.5, config.value, sNCHANNELS_PM + 0.5, config.value);
-        refLine->SetLineColor(kBlue+2);
-        refLine->SetLineStyle(2);
-        refLine->SetLineWidth(2);
-        graph->GetListOfFunctions()->Add(refLine);
-        
-        // Warning zones (±1 from expected) - yellow-orange
-        auto* warningLineLow = new TLine(-0.5, config.value - 1, sNCHANNELS_PM + 0.5, config.value - 1);
-        auto* warningLineHigh = new TLine(-0.5, config.value + 1, sNCHANNELS_PM + 0.5, config.value + 1);
-        warningLineLow->SetLineColor(kOrange+2);
-        warningLineLow->SetLineStyle(3);
-        warningLineLow->SetLineWidth(2);
-        warningLineHigh->SetLineColor(kOrange+2);
-        warningLineHigh->SetLineStyle(3);
-        warningLineHigh->SetLineWidth(2);
-        graph->GetListOfFunctions()->Add(warningLineLow);
-        graph->GetListOfFunctions()->Add(warningLineHigh);
-        
-        // Error zones (±2 from expected) - red
-        auto* errorLineLow = new TLine(-0.5, config.value - 2, sNCHANNELS_PM + 0.5, config.value - 2);
-        auto* errorLineHigh = new TLine(-0.5, config.value + 2, sNCHANNELS_PM + 0.5, config.value + 2);
-        errorLineLow->SetLineColor(kRed);
-        errorLineLow->SetLineStyle(9);
-        errorLineLow->SetLineWidth(1);
-        errorLineHigh->SetLineColor(kRed);
-        errorLineHigh->SetLineStyle(9);
-        errorLineHigh->SetLineWidth(1);
-        graph->GetListOfFunctions()->Add(errorLineLow);
-        graph->GetListOfFunctions()->Add(errorLineHigh);
-    }
-}
-
-void AmplitudePostProcTask::updateGraphsWithData()
-{
-    for (size_t i = 0; i < mGraphsMPVPerConfig.size(); ++i) {
-        auto* graph = mGraphsMPVPerConfig[i].get();
-        if (!graph) {
-            ILOG(Warning, Support) << "Graph " << i << " is null, skipping" << ENDM;
-            continue;
-        }
-        
-        for (std::size_t ch = 0; ch < sNCHANNELS_PM; ++ch) {
-            graph->SetPoint(ch, mChanX[ch], mMean[ch]);
-            graph->SetPointError(ch, mChanXErr[ch], 0.);
-        }
-    }
-}
-
-void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryRef services)
-{
-    ILOG(Info, Support) << "Initialising AmplitudePostProcTask" << ENDM;
-    mPostProcHelper.initialize(trig, services);
-    reset();
-    initializeEmpiricalParameters();
-    
-    // Create global histograms
-    mHistAmpAll = helper::registerHist<TH1F>(
-        getObjectsManager(),
-        quality_control::core::PublicationPolicy::ThroughStop,
-        "", "AmpAllChannels",
-        "FV0 all channels;Channel amplitude (ADC ch);Counts",
-        mAmpBins, mAmpMin, mAmpMax);
-        
-    mHistAmpNormPerChannel = helper::registerHist<TH1F>(
-        getObjectsManager(),
-        quality_control::core::PublicationPolicy::ThroughStop,
-        "", "AmpNormPerChannel", 
-        "FV0 normalised (per channel);Channel amplitude (ADC ch);Normalised counts",
-        mAmpBins, mAmpMin, mAmpMax);
-    mHistAmpNormPerChannel->Sumw2(kFALSE);
-    
-    // Create per-channel histograms
-    for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
-        const std::string name = Form("AmplitudePerChannel/Amp_ch%02u", ch);
-        const std::string title = Form("FV0 channel %u;Channel amplitude (ADC ch);Counts", ch);
-        mMapHistAmpPerChannel[ch] = helper::registerHist<TH1F>(
-            getObjectsManager(),
-            quality_control::core::PublicationPolicy::ThroughStop,
-            "", name, title,
-            mAmpBins, mAmpMin, mAmpMax);
-    }
-    
-    // Create graphs for all configurations
-    createGraphsForConfigurations();
-    
-    ILOG(Info, Support) << "AmplitudePostProcTask initialized with " << sNCHANNELS_PM 
-                        << " channels and " << mExpectedGainConfigs.size()
-                        << " expected gain configuration(s)" << ENDM;
-}
-
-void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef serviceReg)
-{
-    mPostProcHelper.update(trig, serviceReg);
-    
-    auto h2 = mPostProcHelper.template getObject<TH2F>("AmpPerChannel");
-    if (!h2) {
-        ILOG(Error, Support) << "MO 'AmpPerChannel' not found in PostProcHelper" << ENDM;
-        setTimestampToMOs();
-        return;
-    }
-    
-    ILOG(Debug, Support) << "Processing amplitude data with " << h2->GetEntries() 
-                         << " entries for " << mExpectedGainConfigs.size() << " configurations" << ENDM;
-    
-    mHistAmpAll->Reset();
-    mHistAmpNormPerChannel->Reset();
-    for (auto& [_, h] : mMapHistAmpPerChannel) {
-        h->Reset();
-    }
-    
-    mEmpiricalFitsUsed = 0;
-    mFallbackFitsUsed = 0;
-    mFailedFits = 0;
-    
-    for (int chBin = 1, nBins = h2->GetXaxis()->GetNbins(); chBin <= nBins; ++chBin) {
-        unsigned int ch = chBin - 1;
-        if (ch >= sNCHANNELS_PM) continue;
-        
-        std::unique_ptr<TH1D> proj(h2->ProjectionY(Form("p_ch%02u", ch), chBin, chBin));
-        proj->Sumw2(kFALSE);
-        
-        ChannelFitParams params = getChannelFitParams(ch);
-        if (params.useRebin && params.rebinFactor > 1) {
-            proj->Rebin(params.rebinFactor);
-            ILOG(Debug, Support) << "Applied rebinning factor " << params.rebinFactor 
-                                 << " to channel " << ch << ENDM;
-        }
-        
-        mMapHistAmpPerChannel[ch]->Add(proj.get());
-        mHistAmpAll->Add(proj.get());
-        if (double intg = proj->Integral(); intg > 0.) {
-            mHistAmpNormPerChannel->Add(proj.get(), 1.0 / intg);
-        }
-        
-        // Perform Gaussian slice fit
-        if (proj->GetEntries() > 50) {
-            static TF1 fG("fG", "gaus", mAmpMin, mAmpMax);
-            
-            int bMax = proj->GetMaximumBin();
-            double peak = proj->GetBinCenter(bMax);
-            
-            auto [xmin, xmax] = calculateFitWindow(ch, peak, bMax, proj.get());
-            
-            proj->Fit(&fG, "QNR", "", xmin, xmax);
-            mMean[ch] = fG.GetParameter(1);
-            mSigma[ch] = std::abs(fG.GetParameter(2));
-            
-            if (mMean[ch] < mAmpMin || mMean[ch] > mAmpMax || mSigma[ch] <= 0) {
-                DetectorPosition pos = getChannelPosition(ch);
-                ILOG(Warning, Support) << "Suspicious fit result for channel " << ch 
-                                       << " (" << pos.toString() << "): mean=" << mMean[ch] 
-                                       << ", sigma=" << mSigma[ch] << ENDM;
-                mMean[ch] = std::numeric_limits<double>::quiet_NaN();
-                mSigma[ch] = 0.;
-                mFailedFits++;
-            }
-        } else {
-            mMean[ch] = std::numeric_limits<double>::quiet_NaN();
-            mSigma[ch] = 0.;
-            ILOG(Debug, Support) << "Insufficient entries (" << proj->GetEntries() 
-                                 << ") for channel " << ch << ", skipping fit" << ENDM;
-        }
-        
-        mChanX[ch] = ch;
-        mChanXErr[ch] = 0.0;
-    }
-    
-    // Update all graphs with the measured data
-    updateGraphsWithData();
-    
-    logFittingStatistics();
-    setTimestampToMOs();
-    
-    ILOG(Info, Support) << "AmplitudePostProcTask update completed for " 
-                        << mExpectedGainConfigs.size() << " configurations" << ENDM;
-}
-
-void AmplitudePostProcTask::finalize(Trigger, framework::ServiceRegistryRef)
-{
-    int totalChannelsProcessed = 0;
-    int totalEntriesProcessed = 0;
-    
-    for (auto& [ch, hist] : mMapHistAmpPerChannel) {
-        if (hist && hist->GetEntries() > 0) {
-            totalChannelsProcessed++;
-            totalEntriesProcessed += hist->GetEntries();
-        }
-    }
-    
-    logFittingStatistics();
-    
-    // Log graph statistics
-    for (size_t i = 0; i < mExpectedGainConfigs.size() && i < mGraphsMPVPerConfig.size(); ++i) {
-        const auto& config = mExpectedGainConfigs[i];
-        if (mGraphsMPVPerConfig[i]) {
-            ILOG(Info, Support) << "Graph '" << config.name << "' has " 
-                               << mGraphsMPVPerConfig[i]->GetN() << " points" << ENDM;
-        } else {
-            ILOG(Warning, Support) << "Graph '" << config.name << "' is null!" << ENDM;
-        }
-    }
-    
-    ILOG(Info, Support) << "AmplitudePostProcTask finalized. Processed " 
-                       << totalChannelsProcessed << " channels with " 
-                       << totalEntriesProcessed << " entries for " 
-                       << mExpectedGainConfigs.size() << " configurations." << ENDM;
-}
+    // Statistics tracking
+    mutable int mEmpiricalFitsUsed{0};    ///< Counter for empirical fits applied
+    mutable int mFallbackFitsUsed{0};     ///< Counter for fallback fits applied
+    mutable int mFailedFits{0};           ///< Counter for failed fits
+};
 
 } // namespace o2::quality_control_modules::fv0
+
+#endif // QC_MODULE_FV0_AMPLITUDEPOSTPROCTASK_H

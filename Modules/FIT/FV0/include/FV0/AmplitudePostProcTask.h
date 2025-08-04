@@ -135,6 +135,11 @@ private:
     void createGraphsForConfigurations();
     void updateGraphsWithData();
     void applyStyling();
+
+    // Trending
+    void initializeTrending();
+    void updateTrendingData();
+    void createTrendingScalars();
     
     // Configuration & constants
     static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
@@ -146,6 +151,8 @@ private:
     double mSliceFrac{0.25};              ///< Fallback fit window half-width (fraction of peak)
     bool mUseEmpiricalFitting{true};      ///< Enable empirical fitting parameters
     bool mUseFallbackFitting{true};       ///< Enable fallback to fractional window
+    bool mTrendEnabled{false};            ///< Enable trending functionality
+    std::string mTrendScalarsFolder{"TrendsScalars"}; ///< Folder name for trending scalars
     
     // Expected gain configurations (replaces single mExpectedGain)
     std::vector<ExpectedGainConfig> mExpectedGainConfigs;
@@ -163,6 +170,9 @@ private:
     
     // Multiple Gaussian error graphs (one per configuration)
     std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
+    
+    // Trending scalar histograms (one per configuration)
+    std::vector<std::unique_ptr<TH1F>> mTrendingScalars;
     
     // Empirical fitting data structures
     std::map<unsigned int, ChannelFitParams> mChannelFitParams;  ///< Channel-specific fitting parameters

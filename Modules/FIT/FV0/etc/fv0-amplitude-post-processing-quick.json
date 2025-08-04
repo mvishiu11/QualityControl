@@ -59,6 +59,8 @@
             "numOrbitsInTF": "32",
             "cycleDurationMoName": "CycleDurationNTF",
             "timestampSourceLhcIf": "metadata",
+            "trendEnabled": "true",
+            "trendScalarsFolder": "TrendsScalars",
             "pathDigitQcTask": "FV0/MO/DigitsNew/",
             "sliceFrac": "0.15",
             "expectedGainConfigs": [
@@ -88,6 +90,137 @@
           "stopTrigger": [
             "userorcontrol"
           ]
+        },
+        "AmplitudeTrendingConfigs": {
+          "active": "true",
+          "className": "o2::quality_control::postprocessing::TrendingTask",
+          "moduleName": "QcCommon",
+          "detectorName": "FV0",
+  
+          "resumeTrend": "true",
+          "producePlotsOnUpdate": "true",
+          "trendingTimestamp": "validFrom",
+  
+          "dataSources": [
+            {
+              "type": "repository",
+              "path": "FV0/MO/AmplitudePostProc/TrendsScalars",
+              "names": ["pp", "PbPb", "OO"],
+              "reductorName": "o2::quality_control_modules::common::TH1Reductor",
+              "moduleName": "QcCommon"
+            }
+          ],
+  
+          "plots": [
+            {
+              "name": "trend_gain_adcmip_all_configs",
+              "title": "FV0 ADC/MIP trends for all beam configurations",
+              "graphAxisLabel": "ADC/MIP:time",
+              "graphYRange": "2:18",
+              "legend": { 
+                "enabled": true, 
+                "x1": 0.65, 
+                "y1": 0.75, 
+                "x2": 0.90, 
+                "y2": 0.90, 
+                "nColumns": 1 
+              },
+              "graphs": [
+                {
+                  "title": "pp collisions",
+                  "varexp": "pp.mean:time",
+                  "selection": "",
+                  "option": "*LP",
+                  "style": { 
+                    "lineColor": 44, 
+                    "markerColor": 44, 
+                    "markerStyle": 21, 
+                    "lineWidth": 2 
+                  }
+                },
+                {
+                  "title": "Pb-Pb collisions", 
+                  "varexp": "PbPb.mean:time",
+                  "selection": "",
+                  "option": "*LP",
+                  "style": { 
+                    "lineColor": 46, 
+                    "markerColor": 46, 
+                    "markerStyle": 22, 
+                    "lineWidth": 2 
+                  }
+                },
+                {
+                  "title": "O-O collisions",
+                  "varexp": "OO.mean:time", 
+                  "selection": "",
+                  "option": "*LP",
+                  "style": { 
+                    "lineColor": 47, 
+                    "markerColor": 47, 
+                    "markerStyle": 23, 
+                    "lineWidth": 2 
+                  }
+                }
+              ]
+            },
+            {
+              "name": "trend_gain_rms_all_configs",
+              "title": "FV0 ADC/MIP RMS trends for all beam configurations",
+              "graphAxisLabel": "RMS ADC/MIP:time",
+              "graphYRange": "0:3",
+              "legend": { 
+                "enabled": true, 
+                "x1": 0.65, 
+                "y1": 0.75, 
+                "x2": 0.90, 
+                "y2": 0.90, 
+                "nColumns": 1 
+              },
+              "graphs": [
+                {
+                  "title": "pp collisions RMS",
+                  "varexp": "pp.stddev:time",
+                  "selection": "",
+                  "option": "*LP",
+                  "style": { 
+                    "lineColor": 44, 
+                    "markerColor": 44, 
+                    "markerStyle": 25, 
+                    "lineWidth": 2 
+                  }
+                },
+                {
+                  "title": "Pb-Pb collisions RMS",
+                  "varexp": "PbPb.stddev:time",
+                  "selection": "",  
+                  "option": "*LP",
+                  "style": { 
+                    "lineColor": 46, 
+                    "markerColor": 46, 
+                    "markerStyle": 26, 
+                    "lineWidth": 2 
+                  }
+                },
+                {
+                  "title": "O-O collisions RMS",
+                  "varexp": "OO.stddev:time",
+                  "selection": "",
+                  "option": "*LP", 
+                  "style": { 
+                    "lineColor": 47, 
+                    "markerColor": 47, 
+                    "markerStyle": 27, 
+                    "lineWidth": 2 
+                  }
+                }
+              ]
+            }
+          ],
+  
+          "initTrigger": ["userorcontrol"],
+          "updateTrigger": ["newobject:qcdb:FV0/MO/AmplitudePostProc/TrendsScalars/pp"],
+          "stopTrigger": ["userorcontrol"]
         }
       }
     }
