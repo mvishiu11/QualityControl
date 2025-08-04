@@ -333,7 +333,7 @@ void AmplitudePostProcTask::applyStyling()
         
         // Main reference line (expected value)
         auto* refLine = new TLine(-0.5, config.value, sNCHANNELS_PM + 0.5, config.value);
-        refLine->SetLineColor(config.color);
+        refLine->SetLineColor(kBlue+2);
         refLine->SetLineStyle(2);
         refLine->SetLineWidth(2);
         graph->GetListOfFunctions()->Add(refLine);

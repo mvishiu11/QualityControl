@@ -91,33 +91,33 @@
             {
               "name": "trend_mu_adc_mip",
               "title": "ADC/MIP trends for all groupings",
-              "graphAxisLabel": "ADC/MIP:time",
+              "graphAxisLabel": "ADCs:time",
               "graphYRange": "12:16",
-              "legend": { "enabled": true, "x1": 0.70, "y1": 0.70, "x2": 0.93, "y2": 0.90, "nColumns": 1 },
+              "legend": { "enabled": true, "x1": 0.65, "y1": 0.70, "x2": 0.85, "y2": 0.90, "nColumns": 1 },
               "graphs": [
                 {
-                  "title": "All trend",
+                  "title": "FT0 all channels ",
                   "varexp": "All.mean:time",
                   "selection": "",
                   "option": "*LP",
                   "style": { "lineColor": 38, "markerColor": 4, "markerStyle": 20, "lineWidth": 2 }
                 },
                 {
-                  "title": "AInner trend",
+                  "title": "FT0-A Inner ring",
                   "varexp": "AInner.mean:time",
                   "selection": "",
                   "option": "*LP",
                   "style": { "lineColor": 8, "markerColor": 3, "markerStyle": 30, "lineWidth": 2 }
                 },
                 {
-                  "title": "AOuter trend",
+                  "title": "FT0-A Outer ring",
                   "varexp": "AOuter.mean:time",
                   "selection": "",
                   "option": "*LP",
                   "style": { "lineColor": 31, "markerColor": 30, "markerStyle": 23, "lineWidth": 2 }
                 },
                 {
-                  "title": "C trend",
+                  "title": "FT0-C",
                   "varexp": "C.mean:time",
                   "selection": "",
                   "option": "*LP",
