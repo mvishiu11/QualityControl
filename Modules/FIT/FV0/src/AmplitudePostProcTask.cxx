@@ -387,6 +387,19 @@ void AmplitudePostProcTask::updateGraphsWithData()
             graph->SetPointError(ch, mChanXErr[ch], 0.);
         }
     }
+
+    if (mGraphHistMean || mGraphMeanRatio) {
+        for (std::size_t ch = 0; ch < sNCHANNELS_PM; ++ch) {
+          if (mGraphHistMean) {
+            mGraphHistMean->SetPoint(ch, mChanX[ch], mHistMean[ch]);
+            mGraphHistMean->SetPointError(ch, mChanXErr[ch], 0.);
+          }
+          if (mGraphMeanRatio) {
+            mGraphMeanRatio->SetPoint(ch, mChanX[ch], mMeanRatio[ch]);
+            mGraphMeanRatio->SetPointError(ch, mChanXErr[ch], 0.);
+          }
+        }
+    }
 }
 
 void AmplitudePostProcTask::initializeTrending()
@@ -487,6 +500,37 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
     
     // Create graphs for all configurations
     createGraphsForConfigurations();
+
+    // ---------- graphs for raw mean and mean-ratio ----------
+    mGraphHistMean = helper::registerGraph<TGraphErrors>(
+        getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
+        "GaussianSummary/HistMeanVsChannel",
+        "FV0: raw distribution mean vs channel;Channel ID;Mean ADC (ADC ch)",
+        sNCHANNELS_PM);
+
+    mGraphMeanRatio = helper::registerGraph<TGraphErrors>(
+        getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
+        "GaussianSummary/HistMeanOverFitMean",
+        "FV0: ⟨ADC⟩ / μ_{fit} vs channel;Channel ID;Ratio",
+        sNCHANNELS_PM);
+
+    // simple styling
+    if (mGraphHistMean) {
+        mGraphHistMean->SetMarkerStyle(24);
+        mGraphHistMean->SetMarkerColor(kGreen+2);
+        mGraphHistMean->SetLineColor(kGreen+2);
+    }
+    if (mGraphMeanRatio) {
+        mGraphMeanRatio->SetMarkerStyle(25);
+        mGraphMeanRatio->SetMarkerColor(kMagenta+1);
+        mGraphMeanRatio->SetLineColor(kMagenta+1);
+        mGraphMeanRatio->GetYaxis()->SetRangeUser(0.6, 1.4);
+
+        // reference line at ratio = 1
+        auto* one = new TLine(-0.5, 1.0, sNCHANNELS_PM + 0.5, 1.0);
+        one->SetLineStyle(2); one->SetLineColor(kBlue+2); one->SetLineWidth(2);
+        mGraphMeanRatio->GetListOfFunctions()->Add(one);
+    }
     
     // Initialize trending if enabled
     createTrendingScalars();
@@ -541,6 +585,8 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
         }
         
         // Perform Gaussian slice fit
+        double rawMean = proj->GetMean();
+        mHistMean[ch] = rawMean;
         if (proj->GetEntries() > 50) {
             static TF1 fG("fG", "gaus", mAmpMin, mAmpMax);
             
@@ -552,6 +598,12 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
             proj->Fit(&fG, "QNR", "", xmin, xmax);
             mMean[ch] = fG.GetParameter(1);
             mSigma[ch] = std::abs(fG.GetParameter(2));
+
+            if (!std::isnan(mMean[ch]) && mMean[ch] != 0.) {
+                mMeanRatio[ch] = rawMean / mMean[ch];
+            } else {
+                mMeanRatio[ch] = std::numeric_limits<double>::quiet_NaN();
+            }
             
             if (mMean[ch] < mAmpMin || mMean[ch] > mAmpMax || mSigma[ch] <= 0) {
                 DetectorPosition pos = getChannelPosition(ch);
@@ -565,6 +617,7 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
         } else {
             mMean[ch] = std::numeric_limits<double>::quiet_NaN();
             mSigma[ch] = 0.;
+            mMeanRatio[ch] = std::numeric_limits<double>::quiet_NaN();
             ILOG(Debug, Support) << "Insufficient entries (" << proj->GetEntries() 
                                  << ") for channel " << ch << ", skipping fit" << ENDM;
         }
