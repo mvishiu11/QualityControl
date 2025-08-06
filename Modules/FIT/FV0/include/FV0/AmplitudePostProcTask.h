@@ -1,5 +1,3 @@
-// AmplitudePostProcTask.h
-
 // Copyright 2019-2020 CERN and copyright holders of ALICE O2.
 // See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
 // All rights not expressly granted are reserved.
@@ -167,12 +165,19 @@ private:
     std::array<double, sNCHANNELS_PM> mSigma{};
     std::array<double, sNCHANNELS_PM> mChanX{};
     std::array<double, sNCHANNELS_PM> mChanXErr{};
+    std::array<double, sNCHANNELS_PM> mHistMean{};   ///< ⟨ADC⟩ of full distribution
+    std::array<double, sNCHANNELS_PM> mMeanRatio{};  ///< ⟨ADC⟩ / μ_Gauss`
     
     // Multiple Gaussian error graphs (one per configuration)
     std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
+    std::unique_ptr<TGraphErrors> mGraphHistMean;
+    std::unique_ptr<TGraphErrors> mGraphMeanRatio;
+
     
     // Trending scalar histograms (one per configuration)
     std::vector<std::unique_ptr<TH1F>> mTrendingScalars;
+    std::vector<std::unique_ptr<TH1F>> mTrendingRawMean;   ///< ⟨ADC⟩
+    std::vector<std::unique_ptr<TH1F>> mTrendingMeanRatio; ///< ⟨ADC⟩ / μ_Gauss
     
     // Empirical fitting data structures
     std::map<unsigned int, ChannelFitParams> mChannelFitParams;  ///< Channel-specific fitting parameters

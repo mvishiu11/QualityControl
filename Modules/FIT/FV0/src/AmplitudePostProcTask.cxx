@@ -407,54 +407,73 @@ void AmplitudePostProcTask::initializeTrending()
     if (!mTrendEnabled) return;
     
     mTrendingScalars.clear();
+    mTrendingRawMean.clear();
+    mTrendingMeanRatio.clear();
     
-    for (const auto& config : mExpectedGainConfigs) {
-        for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
-            std::string histName = Form("%s/%s/%s_ch%02u", mTrendScalarsFolder.c_str(), config.name.c_str(), config.name.c_str(), ch);
-            std::string histTitle = Form("FV0 Channel %u Trending - %s;Gain (ADC/MIP);Entries", ch, config.displayName.c_str());
-            
-            auto trendHist = helper::registerHist<TH1F>(
-                getObjectsManager(),
-                quality_control::core::PublicationPolicy::ThroughStop,
-                "", histName, histTitle,
-                1, 0.5 * config.value, 1.5 * config.value);
-            
-            mTrendingScalars.push_back(std::move(trendHist));
+    for (const auto& cfg : mExpectedGainConfigs) {
+        const std::string base = mTrendScalarsFolder + "/" + cfg.name;      // e.g. TrendsScalars/pp
+    
+        for (unsigned ch = 0; ch < sNCHANNELS_PM; ++ch) {
+          // --- MPV ----------------------------------------------
+          auto hMPV = helper::registerHist<TH1F>(
+              getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+              Form("%s/%s_ch%02u", base.c_str(), cfg.name.c_str(), ch),
+              Form("FV0 MPV  ch%u  –  %s;MPV (ADC/MIP);", ch, cfg.displayName.c_str()),
+              1, 0.5 * cfg.value, 1.5 * cfg.value);
+          mTrendingScalars.emplace_back(std::move(hMPV));
+    
+          // --- RAW MEAN -------------------------------------------------------
+          auto hRaw = helper::registerHist<TH1F>(
+              getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+              Form("%s/raw_ch%02u", base.c_str(), ch),
+              Form("FV0 ⟨ADC⟩  ch%u  –  %s;Mean ADC;", ch, cfg.displayName.c_str()),
+              1, 0.5 * cfg.value, 1.5 * cfg.value);
+          mTrendingRawMean.emplace_back(std::move(hRaw));
+    
+          // --- RATIO ----------------------------------------------------------
+          auto hRatio = helper::registerHist<TH1F>(
+              getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+              Form("%s/ratio_ch%02u", base.c_str(), ch),
+              Form("FV0 ⟨ADC⟩ / μ  ch%u  –  %s;Ratio;", ch, cfg.displayName.c_str()),
+              1, 0.5, 1.5);
+          mTrendingMeanRatio.emplace_back(std::move(hRatio));
         }
-        
-        ILOG(Info, Support) << "Created " << sNCHANNELS_PM << " trending scalars for config: " << config.name << ENDM;
     }
 }
 
 void AmplitudePostProcTask::updateTrendingData()
 {
-    if (!mTrendEnabled || mTrendingScalars.size() != mExpectedGainConfigs.size() * sNCHANNELS_PM) return;
-    
-    size_t scalarIndex = 0;
-    for (size_t configIdx = 0; configIdx < mExpectedGainConfigs.size(); ++configIdx) {
-        int validChannels = 0;
-        
-        for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
-            auto* hist = mTrendingScalars[scalarIndex].get();
-            if (!hist) {
-                scalarIndex++;
-                continue;
-            }
-            
-            hist->Reset();
-            
-            // Fill trending histogram with single channel value
-            if (!std::isnan(mMean[ch]) && mMean[ch] > 0) {
-                hist->Fill(mMean[ch]);
-                validChannels++;
-            }
-            
-            scalarIndex++;
-        }
-        
-        ILOG(Debug, Support) << "Updated trending scalars for " << mExpectedGainConfigs[configIdx].name 
-                            << " with " << validChannels << " valid channels" << ENDM;
+  if (!mTrendEnabled) { return; }
+
+  const size_t perBeam = sNCHANNELS_PM;
+  const size_t total   = mExpectedGainConfigs.size() * perBeam;
+
+  if (mTrendingScalars.size()        != total ||
+      mTrendingRawMean.size()        != total ||
+      mTrendingMeanRatio.size()      != total) {
+    ILOG(Error, Support) << "Trending scalar vectors out of sync!" << ENDM;
+    return;
+  }
+
+  for (size_t idx = 0; idx < total; ++idx) {
+    const size_t ch = idx % perBeam;
+
+    // clear previous point
+    mTrendingScalars[idx]->Reset();
+    mTrendingRawMean[idx]->Reset();
+    mTrendingMeanRatio[idx]->Reset();
+
+    // push fresh values (if valid)
+    if (!std::isnan(mMean[ch]) && mMean[ch] > 0.) {
+      mTrendingScalars[idx]->Fill(mMean[ch]);
     }
+    if (!std::isnan(mHistMean[ch])) {
+      mTrendingRawMean[idx]->Fill(mHistMean[ch]);
+    }
+    if (!std::isnan(mMeanRatio[ch])) {
+      mTrendingMeanRatio[idx]->Fill(mMeanRatio[ch]);
+    }
+  }
 }
 
 void AmplitudePostProcTask::createTrendingScalars()
@@ -519,17 +538,15 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
         mGraphHistMean->SetMarkerStyle(24);
         mGraphHistMean->SetMarkerColor(kGreen+2);
         mGraphHistMean->SetLineColor(kGreen+2);
+        mGraphHistMean->GetYaxis()->SetRangeUser(0, 350);
+        mGraphHistMean->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
     }
     if (mGraphMeanRatio) {
         mGraphMeanRatio->SetMarkerStyle(25);
         mGraphMeanRatio->SetMarkerColor(kMagenta+1);
         mGraphMeanRatio->SetLineColor(kMagenta+1);
-        mGraphMeanRatio->GetYaxis()->SetRangeUser(0.6, 1.4);
-
-        // reference line at ratio = 1
-        auto* one = new TLine(-0.5, 1.0, sNCHANNELS_PM + 0.5, 1.0);
-        one->SetLineStyle(2); one->SetLineColor(kBlue+2); one->SetLineWidth(2);
-        mGraphMeanRatio->GetListOfFunctions()->Add(one);
+        mGraphMeanRatio->GetYaxis()->SetRangeUser(0, 30);
+        mGraphMeanRatio->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
     }
     
     // Initialize trending if enabled
