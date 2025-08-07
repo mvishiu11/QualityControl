@@ -1,5 +1,3 @@
-// AmplitudePostProcTask.cxx
-
 // Copyright 2019-2020 CERN and copyright holders of ALICE O2.
 // See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
 // All rights not expressly granted are reserved.
@@ -140,7 +138,11 @@ void AmplitudePostProcTask::reset()
     mHistAmpAll.reset();
     mHistAmpNormPerChannel.reset();
     mGraphsMPVPerConfig.clear();
-    mTrendingScalars.clear();
+    
+    // Reset trending histograms
+    mTrendingFittedMeans.reset();
+    mTrendingRawMeans.reset();
+    mTrendingMeanRatios.reset();
     
     mEmpiricalFitsUsed = 0;
     mFallbackFitsUsed = 0;
@@ -192,7 +194,7 @@ void AmplitudePostProcTask::initializeEmpiricalParameters()
     mChannelFitParams[36] = ChannelFitParams(0.36, 0.36, false, 1, "E_R51"); // Ring R51, Sector E
     mChannelFitParams[39] = ChannelFitParams(0.30, 0.40, false, 1, "H_R51"); // Ring R51, Sector H
     
-        // Ring R52 specific overrides
+    // Ring R52 specific overrides
     mChannelFitParams[40] = ChannelFitParams(0.30, 0.30, false, 1, "A_R52"); // Ring R52, Sector A
     mChannelFitParams[42] = ChannelFitParams(0.36, 0.36, false, 1, "C_R52"); // Ring R52, Sector C
     mChannelFitParams[43] = ChannelFitParams(0.36, 0.36, false, 1, "D_R52"); // Ring R52, Sector D
@@ -402,85 +404,57 @@ void AmplitudePostProcTask::updateGraphsWithData()
     }
 }
 
-void AmplitudePostProcTask::initializeTrending()
+void AmplitudePostProcTask::initializeTrendingHistograms()
 {
     if (!mTrendEnabled) return;
     
-    mTrendingScalars.clear();
-    mTrendingRawMean.clear();
-    mTrendingMeanRatio.clear();
+    ILOG(Info, Support) << "Initializing trending histograms (single histogram approach)" << ENDM;
     
-    for (const auto& cfg : mExpectedGainConfigs) {
-        const std::string base = mTrendScalarsFolder + "/" + cfg.name;      // e.g. TrendsScalars/pp
+    // Create single histograms with sNCHANNELS_PM bins (one per channel)
+    mTrendingFittedMeans = helper::registerHist<TH1F>(
+        getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+        mTrendScalarsFolder + "/FittedMeansPerChannel",
+        "FV0 Fitted Means per Channel;Channel ID;Fitted Mean (ADC/MIP)",
+        sNCHANNELS_PM, 0, sNCHANNELS_PM);
+        
+    mTrendingRawMeans = helper::registerHist<TH1F>(
+        getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+        mTrendScalarsFolder + "/RawMeansPerChannel", 
+        "FV0 Raw Means per Channel;Channel ID;Raw Mean (ADC)",
+        sNCHANNELS_PM, 0, sNCHANNELS_PM);
+        
+    mTrendingMeanRatios = helper::registerHist<TH1F>(
+        getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+        mTrendScalarsFolder + "/MeanRatiosPerChannel",
+        "FV0 Mean Ratios per Channel;Channel ID;Raw/Fitted Ratio", 
+        sNCHANNELS_PM, 0, sNCHANNELS_PM);
+        
+    ILOG(Info, Support) << "Created 3 trending histograms with " << sNCHANNELS_PM << " channels each" << ENDM;
+}
+
+void AmplitudePostProcTask::updateTrendingHistograms()
+{
+    if (!mTrendEnabled) return;
     
-        for (unsigned ch = 0; ch < sNCHANNELS_PM; ++ch) {
-          // --- MPV ----------------------------------------------
-          auto hMPV = helper::registerHist<TH1F>(
-              getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
-              Form("%s/%s_ch%02u", base.c_str(), cfg.name.c_str(), ch),
-              Form("FV0 MPV  ch%u  –  %s;MPV (ADC/MIP);", ch, cfg.displayName.c_str()),
-              1, 0.5 * cfg.value, 1.5 * cfg.value);
-          mTrendingScalars.emplace_back(std::move(hMPV));
+    // Reset histograms
+    mTrendingFittedMeans->Reset();
+    mTrendingRawMeans->Reset(); 
+    mTrendingMeanRatios->Reset();
     
-          // --- RAW MEAN -------------------------------------------------------
-          auto hRaw = helper::registerHist<TH1F>(
-              getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
-              Form("%s/raw_ch%02u", base.c_str(), ch),
-              Form("FV0 ⟨ADC⟩  ch%u  –  %s;Mean ADC;", ch, cfg.displayName.c_str()),
-              1, 0.5 * cfg.value, 1.5 * cfg.value);
-          mTrendingRawMean.emplace_back(std::move(hRaw));
-    
-          // --- RATIO ----------------------------------------------------------
-          auto hRatio = helper::registerHist<TH1F>(
-              getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
-              Form("%s/ratio_ch%02u", base.c_str(), ch),
-              Form("FV0 ⟨ADC⟩ / μ  ch%u  –  %s;Ratio;", ch, cfg.displayName.c_str()),
-              1, 0.5, 1.5);
-          mTrendingMeanRatio.emplace_back(std::move(hRatio));
+    // Fill with current fitted values (bin index = channel + 1)
+    for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
+        if (!std::isnan(mMean[ch]) && mMean[ch] > 0.) {
+            mTrendingFittedMeans->SetBinContent(ch + 1, mMean[ch]);
+        }
+        if (!std::isnan(mHistMean[ch])) {
+            mTrendingRawMeans->SetBinContent(ch + 1, mHistMean[ch]);
+        }
+        if (!std::isnan(mMeanRatio[ch])) {
+            mTrendingMeanRatios->SetBinContent(ch + 1, mMeanRatio[ch]);
         }
     }
-}
-
-void AmplitudePostProcTask::updateTrendingData()
-{
-  if (!mTrendEnabled) { return; }
-
-  const size_t perBeam = sNCHANNELS_PM;
-  const size_t total   = mExpectedGainConfigs.size() * perBeam;
-
-  if (mTrendingScalars.size()        != total ||
-      mTrendingRawMean.size()        != total ||
-      mTrendingMeanRatio.size()      != total) {
-    ILOG(Error, Support) << "Trending scalar vectors out of sync!" << ENDM;
-    return;
-  }
-
-  for (size_t idx = 0; idx < total; ++idx) {
-    const size_t ch = idx % perBeam;
-
-    // clear previous point
-    mTrendingScalars[idx]->Reset();
-    mTrendingRawMean[idx]->Reset();
-    mTrendingMeanRatio[idx]->Reset();
-
-    // push fresh values (if valid)
-    if (!std::isnan(mMean[ch]) && mMean[ch] > 0.) {
-      mTrendingScalars[idx]->Fill(mMean[ch]);
-    }
-    if (!std::isnan(mHistMean[ch])) {
-      mTrendingRawMean[idx]->Fill(mHistMean[ch]);
-    }
-    if (!std::isnan(mMeanRatio[ch])) {
-      mTrendingMeanRatio[idx]->Fill(mMeanRatio[ch]);
-    }
-  }
-}
-
-void AmplitudePostProcTask::createTrendingScalars()
-{
-    if (mTrendEnabled) {
-        initializeTrending();
-    }
+    
+    ILOG(Debug, Support) << "Updated trending histograms with fitted values" << ENDM;
 }
 
 void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryRef services)
@@ -549,8 +523,7 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
         mGraphMeanRatio->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
     }
     
-    // Initialize trending if enabled
-    createTrendingScalars();
+    initializeTrendingHistograms();
     
     ILOG(Info, Support) << "AmplitudePostProcTask initialized with " << sNCHANNELS_PM 
                         << " channels and " << mExpectedGainConfigs.size()
@@ -646,8 +619,7 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     // Update all graphs with the measured data
     updateGraphsWithData();
     
-    // Update trending data if enabled
-    updateTrendingData();
+    updateTrendingHistograms();
     
     logFittingStatistics();
     setTimestampToMOs();
@@ -678,6 +650,16 @@ void AmplitudePostProcTask::finalize(Trigger, framework::ServiceRegistryRef)
                                << mGraphsMPVPerConfig[i]->GetN() << " points" << ENDM;
         } else {
             ILOG(Warning, Support) << "Graph '" << config.name << "' is null!" << ENDM;
+        }
+    }
+    
+    // Log trending histogram statistics
+    if (mTrendEnabled) {
+        if (mTrendingFittedMeans && mTrendingRawMeans && mTrendingMeanRatios) {
+            ILOG(Info, Support) << "Trending histograms: " 
+                               << "FittedMeans=" << mTrendingFittedMeans->Integral()
+                               << ", RawMeans=" << mTrendingRawMeans->Integral()
+                               << ", Ratios=" << mTrendingMeanRatios->Integral() << ENDM;
         }
     }
     

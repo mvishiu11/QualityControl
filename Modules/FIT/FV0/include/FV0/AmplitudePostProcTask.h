@@ -135,9 +135,8 @@ private:
     void applyStyling();
 
     // Trending
-    void initializeTrending();
-    void updateTrendingData();
-    void createTrendingScalars();
+    void initializeTrendingHistograms();
+    void updateTrendingHistograms();
     
     // Configuration & constants
     static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
@@ -166,18 +165,17 @@ private:
     std::array<double, sNCHANNELS_PM> mChanX{};
     std::array<double, sNCHANNELS_PM> mChanXErr{};
     std::array<double, sNCHANNELS_PM> mHistMean{};   ///< ⟨ADC⟩ of full distribution
-    std::array<double, sNCHANNELS_PM> mMeanRatio{};  ///< ⟨ADC⟩ / μ_Gauss`
-    
+    std::array<double, sNCHANNELS_PM> mMeanRatio{};  ///< ⟨ADC⟩ / μ_Gauss
+
     // Multiple Gaussian error graphs (one per configuration)
     std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
     std::unique_ptr<TGraphErrors> mGraphHistMean;
     std::unique_ptr<TGraphErrors> mGraphMeanRatio;
 
-    
-    // Trending scalar histograms (one per configuration)
-    std::vector<std::unique_ptr<TH1F>> mTrendingScalars;
-    std::vector<std::unique_ptr<TH1F>> mTrendingRawMean;   ///< ⟨ADC⟩
-    std::vector<std::unique_ptr<TH1F>> mTrendingMeanRatio; ///< ⟨ADC⟩ / μ_Gauss
+    // Trending histograms
+    std::unique_ptr<TH1F> mTrendingFittedMeans;     ///< MPV per channel (single histogram)
+    std::unique_ptr<TH1F> mTrendingRawMeans;        ///< Raw mean per channel (single histogram)
+    std::unique_ptr<TH1F> mTrendingMeanRatios;      ///< Ratio per channel (single histogram)
     
     // Empirical fitting data structures
     std::map<unsigned int, ChannelFitParams> mChannelFitParams;  ///< Channel-specific fitting parameters
