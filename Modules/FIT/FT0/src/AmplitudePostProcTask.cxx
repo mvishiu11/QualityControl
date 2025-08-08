@@ -40,12 +40,12 @@ void AmplitudePostProcTask::configure(const boost::property_tree::ptree& cfg)
   auto key = [&cfgCustom](const std::string& e) { return Form("%s.%s", cfgCustom, e.c_str()); };
 
   // ADC histogram config
-  mAmpMin  = helper::getConfigFromPropertyTree<int>(cfg, key("ampMin"),  -100);
-  mAmpMax  = helper::getConfigFromPropertyTree<int>(cfg, key("ampMax"),   4100);
-  mAmpBins = helper::getConfigFromPropertyTree<int>(cfg, key("ampBins"),  4200);
+  mAmpMin = helper::getConfigFromPropertyTree<int>(cfg, key("ampMin"), -100);
+  mAmpMax = helper::getConfigFromPropertyTree<int>(cfg, key("ampMax"), 4100);
+  mAmpBins = helper::getConfigFromPropertyTree<int>(cfg, key("ampBins"), 4200);
 
   // fixed fractional window
-  mLeftSliceFrac  = helper::getConfigFromPropertyTree<double>(cfg, key("leftSliceFrac"),  0.15);
+  mLeftSliceFrac = helper::getConfigFromPropertyTree<double>(cfg, key("leftSliceFrac"), 0.15);
   mRightSliceFrac = helper::getConfigFromPropertyTree<double>(cfg, key("rightSliceFrac"), 0.15);
 
   // weighted-mean bin cut
@@ -58,8 +58,8 @@ void AmplitudePostProcTask::configure(const boost::property_tree::ptree& cfg)
   mPathDigitQcTask = helper::getConfigFromPropertyTree<std::string>(cfg, key("pathDigitQcTask"), "FT0/MO/Digits/");
 
   // trend persistence knobs
-  mTrendEnabled       = helper::getConfigFromPropertyTree<bool>(cfg,   key("trendEnabled"), true);
-  mTrendMaxPoints     = helper::getConfigFromPropertyTree<int>(cfg,    key("trendMaxPoints"), 10);
+  mTrendEnabled = helper::getConfigFromPropertyTree<bool>(cfg, key("trendEnabled"), true);
+  mTrendMaxPoints = helper::getConfigFromPropertyTree<int>(cfg, key("trendMaxPoints"), 10);
   mTrendScalarsFolder = helper::getConfigFromPropertyTree<std::string>(cfg, key("trendScalarsFolder"), "TrendsScalars");
 
   ILOG(Info, Support) << "AmplitudePostProcTask configured: "
@@ -107,19 +107,21 @@ void AmplitudePostProcTask::setTimestampToMOs()
 std::pair<double, double> AmplitudePostProcTask::computeWindow(double peak) const
 {
   // symmetric or asymmetric fractional window around the peak
-  double xmin = std::max<double>(peak - mLeftSliceFrac  * std::abs(peak),  mAmpMin);
-  double xmax = std::min<double>(peak + mRightSliceFrac * std::abs(peak),  mAmpMax);
+  double xmin = std::max<double>(peak - mLeftSliceFrac * std::abs(peak), mAmpMin);
+  double xmax = std::min<double>(peak + mRightSliceFrac * std::abs(peak), mAmpMax);
   if (xmax <= xmin) {
     // fallback to tiny window around peak
     xmin = std::max<double>(peak - 1.0, mAmpMin);
     xmax = std::min<double>(peak + 1.0, mAmpMax);
   }
-  return {xmin, xmax};
+  return { xmin, xmax };
 }
 
 double AmplitudePostProcTask::computeWeightedMeanInWindow(const TH1D* h, double xmin, double xmax) const
 {
-  if (!h) { return std::numeric_limits<double>::quiet_NaN(); }
+  if (!h) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
   const int bmin = std::max(1, h->GetXaxis()->FindBin(xmin));
   const int bmax = std::min(h->GetNbinsX(), h->GetXaxis()->FindBin(xmax));
 
@@ -128,13 +130,15 @@ double AmplitudePostProcTask::computeWeightedMeanInWindow(const TH1D* h, double 
 
   for (int b = bmin; b <= bmax; ++b) {
     const double n = h->GetBinContent(b);
-    if (n < mMinBinEntriesForWeight) continue; // ignore empty/tiny bins
+    if (n < mMinBinEntriesForWeight)
+      continue; // ignore empty/tiny bins
     const double x = h->GetBinCenter(b);
-    wsum  += n;
+    wsum += n;
     xwsum += x * n;
   }
 
-  if (wsum <= 0.) return std::numeric_limits<double>::quiet_NaN();
+  if (wsum <= 0.)
+    return std::numeric_limits<double>::quiet_NaN();
   return xwsum / wsum;
 }
 
@@ -159,9 +163,9 @@ bool AmplitudePostProcTask::fitRegionGaussianAndOverlay(TH1F* regionHist,
 
   // 3) Fit a Gaussian, but DO NOT attach TF1 to the histogram
   TF1 fG_local("fG_tmp", "gaus", xmin, xmax);
-  regionHist->Fit(&fG_local, "QNR", "", xmin, xmax);  // Q: quiet, N: don't store, R: range
+  regionHist->Fit(&fG_local, "QNR", "", xmin, xmax); // Q: quiet, N: don't store, R: range
 
-  outMu    = fG_local.GetParameter(1);
+  outMu = fG_local.GetParameter(1);
   outSigma = std::abs(fG_local.GetParameter(2));
 
   // 4) Create a TGraph curve from the fit parameters and attach that instead of TF1
@@ -179,7 +183,8 @@ bool AmplitudePostProcTask::fitRegionGaussianAndOverlay(TH1F* regionHist,
     gr->SetTitle("Gaussian fit");
     gr->SetLineColor(kGreen + 2);
     gr->SetLineWidth(2);
-    if (lst) lst->Add(gr); // ROOT takes ownership
+    if (lst)
+      lst->Add(gr); // ROOT takes ownership
   }
 
   // 5) Weighted mean in the same window (red vertical line)
@@ -190,19 +195,22 @@ bool AmplitudePostProcTask::fitRegionGaussianAndOverlay(TH1F* regionHist,
     const int bmax = std::min(regionHist->GetNbinsX(), regionHist->GetXaxis()->FindBin(xmax));
     for (int b = bmin; b <= bmax; ++b) {
       const double n = regionHist->GetBinContent(b);
-      if (n < mMinBinEntriesForWeight) continue;
+      if (n < mMinBinEntriesForWeight)
+        continue;
       const double x = regionHist->GetBinCenter(b);
-      wsum  += n;
+      wsum += n;
       xwsum += x * n;
     }
-    if (wsum > 0.) muW = xwsum / wsum;
+    if (wsum > 0.)
+      muW = xwsum / wsum;
   }
   if (!std::isnan(muW)) {
     auto* wm = new TLine(muW, 0., muW, regionHist->GetMaximum());
     wm->SetLineColor(kRed);
     wm->SetLineStyle(1);
     wm->SetLineWidth(2);
-    if (lst) lst->Add(wm); // ROOT takes ownership
+    if (lst)
+      lst->Add(wm); // ROOT takes ownership
   }
 
   // 6) Window bounds (blue dashed lines)
@@ -210,13 +218,15 @@ bool AmplitudePostProcTask::fitRegionGaussianAndOverlay(TH1F* regionHist,
   lwmin->SetLineColor(kBlue);
   lwmin->SetLineStyle(2);
   lwmin->SetLineWidth(2);
-  if (lst) lst->Add(lwmin); // ROOT takes ownership
+  if (lst)
+    lst->Add(lwmin); // ROOT takes ownership
 
   auto* lwmax = new TLine(xmax, 0., xmax, regionHist->GetMaximum());
   lwmax->SetLineColor(kBlue);
   lwmax->SetLineStyle(2);
   lwmax->SetLineWidth(2);
-  if (lst) lst->Add(lwmax); // ROOT takes ownership
+  if (lst)
+    lst->Add(lwmax); // ROOT takes ownership
 
   // 7) Basic sanity
   if (outMu < mAmpMin || outMu > mAmpMax || outSigma <= 0.) {
@@ -261,7 +271,7 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
     "", "AmpNormPerChannel", "FT0 normalized per channel;Channel amplitude (ADC ch);Normalized counts",
     mAmpBins, mAmpMin, mAmpMax);
   mHistAmpNormPerChannel->Sumw2(kFALSE);
-  
+
   mTrendAInner = helper::registerHist<TH1F>(
     getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
     "", "TrendsScalars/AInner", "AInner;dummy;value", 1, mAmpMin, mAmpMax);
@@ -273,11 +283,11 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
     "", "TrendsScalars/C", "C;dummy;value", 1, mAmpMin, mAmpMax);
   mTrendAll = helper::registerHist<TH1F>(
     getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
-    "", "TrendsScalars/All", "All;dummy;value", 1, mAmpMin, mAmpMax);  
+    "", "TrendsScalars/All", "All;dummy;value", 1, mAmpMin, mAmpMax);
 
   // per-channel histos (0..207)
   for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
-    const std::string name  = Form("AmplitudePerChannel/Amp_ch%03u", ch);
+    const std::string name = Form("AmplitudePerChannel/Amp_ch%03u", ch);
     const std::string title = Form("FT0 channel %u;Channel amplitude (ADC ch);Counts", ch);
     mMapHistAmpPerChannel[ch] = helper::registerHist<TH1F>(
       getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
@@ -313,7 +323,7 @@ void AmplitudePostProcTask::initialize(Trigger trig, framework::ServiceRegistryR
 void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef serviceReg)
 {
   ILOG(Info, Support) << "=== AmplitudePostProcTask::update() START ===" << ENDM;
-  
+
   try {
     mPostProcHelper.update(trig, serviceReg);
     ILOG(Info, Support) << "PostProcHelper updated, timestamp = " << mPostProcHelper.mTimestampAnchor << ENDM;
@@ -341,7 +351,8 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     // iterate channels
     for (int chBin = 1, nBins = h2->GetXaxis()->GetNbins(); chBin <= nBins; ++chBin) {
       unsigned int ch = chBin - 1;
-      if (ch >= sNCHANNELS_PM) continue;
+      if (ch >= sNCHANNELS_PM)
+        continue;
 
       std::unique_ptr<TH1D> proj(h2->ProjectionY(Form("p_ch%03u", ch), chBin, chBin));
       proj->Sumw2(kFALSE);
@@ -382,8 +393,8 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     // region gaussian fits + overlays
     fitRegionGaussianAndOverlay(mHistAmpAInner.get(), "fG_AInner", mMuAInner, mSigAInner);
     fitRegionGaussianAndOverlay(mHistAmpAOuter.get(), "fG_AOuter", mMuAOuter, mSigAOuter);
-    fitRegionGaussianAndOverlay(mHistAmpC.get(),      "fG_C",      mMuC,      mSigC);
-    fitRegionGaussianAndOverlay(mHistAmpAll.get(),    "fG_All",    mMuAll,    mSigAll);
+    fitRegionGaussianAndOverlay(mHistAmpC.get(), "fG_C", mMuC, mSigC);
+    fitRegionGaussianAndOverlay(mHistAmpAll.get(), "fG_All", mMuAll, mSigAll);
 
     // update per-channel summary graph (muW / expectedGain)
     for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
@@ -395,24 +406,25 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     }
 
     auto updateHistogram = [](TH1F* h, double v) {
-      if (!h || std::isnan(v)) return;
+      if (!h || std::isnan(v))
+        return;
       h->Reset("ICES");
       h->Fill(v);
     };
-    
+
     updateHistogram(mTrendAInner.get(), mMuAInner);
     updateHistogram(mTrendAOuter.get(), mMuAOuter);
-    updateHistogram(mTrendC.get(),      mMuC);
-    updateHistogram(mTrendAll.get(),    mMuAll);
+    updateHistogram(mTrendC.get(), mMuC);
+    updateHistogram(mTrendAll.get(), mMuAll);
 
     setTimestampToMOs();
-    
+
     ILOG(Info, Support) << "Update done. Region mu (ADC): "
                         << "AInner=" << mMuAInner
                         << ", AOuter=" << mMuAOuter
                         << ", C=" << mMuC
                         << ", All=" << mMuAll << ENDM;
-                        
+
   } catch (const std::exception& e) {
     ILOG(Error, Support) << "Exception in AmplitudePostProcTask::update(): " << e.what() << ENDM;
     throw;
@@ -420,7 +432,7 @@ void AmplitudePostProcTask::update(Trigger trig, framework::ServiceRegistryRef s
     ILOG(Error, Support) << "Unknown exception in AmplitudePostProcTask::update()" << ENDM;
     throw;
   }
-  
+
   ILOG(Info, Support) << "=== AmplitudePostProcTask::update() END ===" << ENDM;
 }
 

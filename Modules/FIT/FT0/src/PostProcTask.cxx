@@ -73,8 +73,8 @@ void PostProcTask::configure(const boost::property_tree::ptree& config)
   mMIPTolerancePercent = helper::getConfigFromPropertyTree<double>(config, cfgPath("mipTolerancePercent"), 20.0);
   mMinEntriesForFit = helper::getConfigFromPropertyTree<int>(config, cfgPath("minEntriesForFit"), 50);
 
-  ILOG(Info, Support) << "PostProcTask configured with amplitude analysis: " 
-                      << (mEnableAmplitudeAnalysis ? "enabled" : "disabled") 
+  ILOG(Info, Support) << "PostProcTask configured with amplitude analysis: "
+                      << (mEnableAmplitudeAnalysis ? "enabled" : "disabled")
                       << ", MIP tracking: " << (mEnableMIPTracking ? "enabled" : "disabled")
                       << ", slice fractions: [" << mSliceFracLeft << ", " << mSliceFracRight << "]" << ENDM;
 
@@ -119,7 +119,7 @@ void PostProcTask::reset()
     mHistMIPTrends.reset();
     mGraphMIPvsChannel.reset();
   }
-  
+
   // Reset statistics counters
   mSuccessfulFits = 0;
   mFailedFits = 0;
@@ -154,26 +154,26 @@ void PostProcTask::initialize(Trigger trg, framework::ServiceRegistryRef service
   // NEW: Create MIP tracking histograms if enabled
   if (mEnableMIPTracking) {
     mHistMIPValues = helper::registerHist<TH1F>(
-        getObjectsManager(),
-        quality_control::core::PublicationPolicy::ThroughStop,
-        "", "MIPValues",
-        "MIP values per channel;Channel;MIP value (ADC ch)",
-        sNCHANNELS_PM, 0, sNCHANNELS_PM);
-        
+      getObjectsManager(),
+      quality_control::core::PublicationPolicy::ThroughStop,
+      "", "MIPValues",
+      "MIP values per channel;Channel;MIP value (ADC ch)",
+      sNCHANNELS_PM, 0, sNCHANNELS_PM);
+
     mHistMIPDeviations = helper::registerHist<TH1F>(
-        getObjectsManager(),
-        quality_control::core::PublicationPolicy::ThroughStop,
-        "", "MIPDeviations",
-        "MIP deviations from expected;Channel;Deviation (%)",
-        sNCHANNELS_PM, 0, sNCHANNELS_PM);
-        
+      getObjectsManager(),
+      quality_control::core::PublicationPolicy::ThroughStop,
+      "", "MIPDeviations",
+      "MIP deviations from expected;Channel;Deviation (%)",
+      sNCHANNELS_PM, 0, sNCHANNELS_PM);
+
     mHistMIPTrends = helper::registerHist<TH2F>(
-        getObjectsManager(),
-        quality_control::core::PublicationPolicy::ThroughStop,
-        "COLZ", "MIPTrends",
-        "MIP trends over time;Time bin;Channel;MIP deviation (%)",
-        100, 0, 100, sNCHANNELS_PM, 0, sNCHANNELS_PM);
-        
+      getObjectsManager(),
+      quality_control::core::PublicationPolicy::ThroughStop,
+      "COLZ", "MIPTrends",
+      "MIP trends over time;Time bin;Channel;MIP deviation (%)",
+      100, 0, 100, sNCHANNELS_PM, 0, sNCHANNELS_PM);
+
     ILOG(Info, Support) << "Created MIP tracking histograms" << ENDM;
   }
 
@@ -186,207 +186,211 @@ void PostProcTask::initialize(Trigger trg, framework::ServiceRegistryRef service
   getObjectsManager()->startPublishing(mHistStatsSideC.get());
   getObjectsManager()->setDefaultDrawOptions(mHistStatsSideC.get(), "TEXT COLZ L");
 
-  ILOG(Info, Support) << "PostProcTask initialized with " << sNCHANNELS_PM 
+  ILOG(Info, Support) << "PostProcTask initialized with " << sNCHANNELS_PM
                       << " channels, amplitude analysis " << (mEnableAmplitudeAnalysis ? "enabled" : "disabled")
                       << ", MIP tracking " << (mEnableMIPTracking ? "enabled" : "disabled") << ENDM;
 }
 
 std::pair<double, double> PostProcTask::calculateFitWindow(double peak, double sliceFracLeft, double sliceFracRight) const
 {
-    // Calculate asymmetric fit window using configurable fractions
-    double xmin = std::max<double>(peak - sliceFracLeft * std::abs(peak), -100.0);
-    double xmax = std::min<double>(peak + sliceFracRight * std::abs(peak), 4100.0);
-    
-    return std::make_pair(xmin, xmax);
+  // Calculate asymmetric fit window using configurable fractions
+  double xmin = std::max<double>(peak - sliceFracLeft * std::abs(peak), -100.0);
+  double xmax = std::min<double>(peak + sliceFracRight * std::abs(peak), 4100.0);
+
+  return std::make_pair(xmin, xmax);
 }
 
 void PostProcTask::performAmplitudeAnalysis(TH2F* hAmpPerChannel)
 {
-    if (!hAmpPerChannel || !mEnableAmplitudeAnalysis) return;
-    
-    ILOG(Debug, Support) << "Performing amplitude analysis with " << hAmpPerChannel->GetEntries() 
-                         << " entries, slice fractions [" << mSliceFracLeft << ", " << mSliceFracRight << "]" << ENDM;
-    
-    // Reset statistics counters
-    mSuccessfulFits = 0;
-    mFailedFits = 0;
-    
-    // Process each channel with Gaussian fitting
-    for (int chBin = 1, nBins = hAmpPerChannel->GetXaxis()->GetNbins(); chBin <= nBins; ++chBin) {
-        unsigned int ch = chBin - 1;
-        if (ch >= sNCHANNELS_PM) continue;
-        
-        // Extract amplitude histogram for this channel
-        std::unique_ptr<TH1D> proj(hAmpPerChannel->ProjectionY(Form("p_ch%03u", ch), chBin, chBin));
-        proj->Sumw2(kFALSE);
-        
-        // Initialize arrays
-        mChanX[ch] = ch;
-        mChanXErr[ch] = 0.0;
-        
-        // Perform Gaussian slice fit if we have enough statistics
-        if (proj->GetEntries() > mMinEntriesForFit) {
-            static TF1 fG("fG", "gaus", -100, 4100);
-            
-            int bMax = proj->GetMaximumBin();
-            double peak = proj->GetBinCenter(bMax);
-            
-            // Use configurable fit window calculation
-            auto [xmin, xmax] = calculateFitWindow(peak, mSliceFracLeft, mSliceFracRight);
-            
-            // Perform the Gaussian fit
-            proj->Fit(&fG, "QNR", "", xmin, xmax);
-            mMean[ch] = fG.GetParameter(1);
-            mSigma[ch] = std::abs(fG.GetParameter(2));
-            
-            // Validate fit results
-            if (mMean[ch] < -100 || mMean[ch] > 4100 || mSigma[ch] <= 0) {
-                ILOG(Debug, Support) << "Invalid fit result for channel " << ch 
-                                     << ": mean=" << mMean[ch] << ", sigma=" << mSigma[ch] << ENDM;
-                mMean[ch] = std::numeric_limits<double>::quiet_NaN();
-                mSigma[ch] = 0.;
-                mFailedFits++;
-            } else {
-                mSuccessfulFits++;
-            }
-        } else {
-            mMean[ch] = std::numeric_limits<double>::quiet_NaN();
-            mSigma[ch] = 0.;
-            ILOG(Debug, Support) << "Insufficient entries (" << proj->GetEntries() 
-                                 << ") for channel " << ch << ", skipping fit" << ENDM;
-        }
+  if (!hAmpPerChannel || !mEnableAmplitudeAnalysis)
+    return;
+
+  ILOG(Debug, Support) << "Performing amplitude analysis with " << hAmpPerChannel->GetEntries()
+                       << " entries, slice fractions [" << mSliceFracLeft << ", " << mSliceFracRight << "]" << ENDM;
+
+  // Reset statistics counters
+  mSuccessfulFits = 0;
+  mFailedFits = 0;
+
+  // Process each channel with Gaussian fitting
+  for (int chBin = 1, nBins = hAmpPerChannel->GetXaxis()->GetNbins(); chBin <= nBins; ++chBin) {
+    unsigned int ch = chBin - 1;
+    if (ch >= sNCHANNELS_PM)
+      continue;
+
+    // Extract amplitude histogram for this channel
+    std::unique_ptr<TH1D> proj(hAmpPerChannel->ProjectionY(Form("p_ch%03u", ch), chBin, chBin));
+    proj->Sumw2(kFALSE);
+
+    // Initialize arrays
+    mChanX[ch] = ch;
+    mChanXErr[ch] = 0.0;
+
+    // Perform Gaussian slice fit if we have enough statistics
+    if (proj->GetEntries() > mMinEntriesForFit) {
+      static TF1 fG("fG", "gaus", -100, 4100);
+
+      int bMax = proj->GetMaximumBin();
+      double peak = proj->GetBinCenter(bMax);
+
+      // Use configurable fit window calculation
+      auto [xmin, xmax] = calculateFitWindow(peak, mSliceFracLeft, mSliceFracRight);
+
+      // Perform the Gaussian fit
+      proj->Fit(&fG, "QNR", "", xmin, xmax);
+      mMean[ch] = fG.GetParameter(1);
+      mSigma[ch] = std::abs(fG.GetParameter(2));
+
+      // Validate fit results
+      if (mMean[ch] < -100 || mMean[ch] > 4100 || mSigma[ch] <= 0) {
+        ILOG(Debug, Support) << "Invalid fit result for channel " << ch
+                             << ": mean=" << mMean[ch] << ", sigma=" << mSigma[ch] << ENDM;
+        mMean[ch] = std::numeric_limits<double>::quiet_NaN();
+        mSigma[ch] = 0.;
+        mFailedFits++;
+      } else {
+        mSuccessfulFits++;
+      }
+    } else {
+      mMean[ch] = std::numeric_limits<double>::quiet_NaN();
+      mSigma[ch] = 0.;
+      ILOG(Debug, Support) << "Insufficient entries (" << proj->GetEntries()
+                           << ") for channel " << ch << ", skipping fit" << ENDM;
     }
-    
-    // Create or update summary graph
-    if (!mGraphMPVvsChannel) {
-        mGraphMPVvsChannel = helper::registerGraph<TGraphErrors>(
-            getObjectsManager(),
-            quality_control::core::PublicationPolicy::ThroughStop,
-            "AP", "AmplitudeAnalysis/MeanVsChannel",
-            "FT0: Gaussian mean per channel;Channel ID;Mean amplitude (ADC ch)",
-            sNCHANNELS_PM);
-            
-        mGraphMPVvsChannel->GetXaxis()->SetLimits(-1, sNCHANNELS_PM + 1);
-        mGraphMPVvsChannel->SetMarkerStyle(21);
-        mGraphMPVvsChannel->SetMarkerSize(1.1);
-        mGraphMPVvsChannel->SetMarkerColor(kRed);
-        mGraphMPVvsChannel->SetLineColor(kBlack);
-        
-        ILOG(Info, Support) << "Created amplitude analysis summary graph" << ENDM;
-    }
-    
-    // Update the graph data
-    for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
-        mGraphMPVvsChannel->SetPoint(i, mChanX[i], mMean[i]);
-        mGraphMPVvsChannel->SetPointError(i, mChanXErr[i], 0.);
-    }
+  }
+
+  // Create or update summary graph
+  if (!mGraphMPVvsChannel) {
+    mGraphMPVvsChannel = helper::registerGraph<TGraphErrors>(
+      getObjectsManager(),
+      quality_control::core::PublicationPolicy::ThroughStop,
+      "AP", "AmplitudeAnalysis/MeanVsChannel",
+      "FT0: Gaussian mean per channel;Channel ID;Mean amplitude (ADC ch)",
+      sNCHANNELS_PM);
+
+    mGraphMPVvsChannel->GetXaxis()->SetLimits(-1, sNCHANNELS_PM + 1);
+    mGraphMPVvsChannel->SetMarkerStyle(21);
+    mGraphMPVvsChannel->SetMarkerSize(1.1);
+    mGraphMPVvsChannel->SetMarkerColor(kRed);
+    mGraphMPVvsChannel->SetLineColor(kBlack);
+
+    ILOG(Info, Support) << "Created amplitude analysis summary graph" << ENDM;
+  }
+
+  // Update the graph data
+  for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
+    mGraphMPVvsChannel->SetPoint(i, mChanX[i], mMean[i]);
+    mGraphMPVvsChannel->SetPointError(i, mChanXErr[i], 0.);
+  }
 }
 
 void PostProcTask::performMIPAnalysis()
 {
-    if (!mEnableMIPTracking) return;
-    
-    mMIPChannelsInRange = 0;
-    mMIPChannelsOutOfRange = 0;
-    
-    for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
-        // Use the fitted mean as our MIP estimate
-        mMIPValues[ch] = mMean[ch];
-        
-        // Calculate deviation from expected MIP value
-        if (!std::isnan(mMean[ch]) && mMean[ch] > 0) {
-            double deviation = ((mMean[ch] - mMIPExpectedValue) / mMIPExpectedValue) * 100.0;
-            mMIPDeviations[ch] = deviation;
-            
-            // Check if MIP is within expected range
-            if (std::abs(deviation) <= mMIPTolerancePercent) {
-                mMIPChannelsInRange++;
-            } else {
-                mMIPChannelsOutOfRange++;
-                ILOG(Debug, Support) << "Channel " << ch << " MIP deviation: " << deviation 
-                                     << "% (mean=" << mMean[ch] << ", expected=" << mMIPExpectedValue << ")" << ENDM;
-            }
-        } else {
-            mMIPDeviations[ch] = std::numeric_limits<double>::quiet_NaN();
-        }
-        
-        // Fill MIP histograms
-        if (!std::isnan(mMIPValues[ch])) {
-            mHistMIPValues->SetBinContent(ch + 1, mMIPValues[ch]);
-        }
-        if (!std::isnan(mMIPDeviations[ch])) {
-            mHistMIPDeviations->SetBinContent(ch + 1, mMIPDeviations[ch]);
-        }
+  if (!mEnableMIPTracking)
+    return;
+
+  mMIPChannelsInRange = 0;
+  mMIPChannelsOutOfRange = 0;
+
+  for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
+    // Use the fitted mean as our MIP estimate
+    mMIPValues[ch] = mMean[ch];
+
+    // Calculate deviation from expected MIP value
+    if (!std::isnan(mMean[ch]) && mMean[ch] > 0) {
+      double deviation = ((mMean[ch] - mMIPExpectedValue) / mMIPExpectedValue) * 100.0;
+      mMIPDeviations[ch] = deviation;
+
+      // Check if MIP is within expected range
+      if (std::abs(deviation) <= mMIPTolerancePercent) {
+        mMIPChannelsInRange++;
+      } else {
+        mMIPChannelsOutOfRange++;
+        ILOG(Debug, Support) << "Channel " << ch << " MIP deviation: " << deviation
+                             << "% (mean=" << mMean[ch] << ", expected=" << mMIPExpectedValue << ")" << ENDM;
+      }
+    } else {
+      mMIPDeviations[ch] = std::numeric_limits<double>::quiet_NaN();
     }
-    
-    // Create MIP summary graph if it doesn't exist
-    if (!mGraphMIPvsChannel) {
-        mGraphMIPvsChannel = helper::registerGraph<TGraphErrors>(
-            getObjectsManager(),
-            quality_control::core::PublicationPolicy::ThroughStop,
-            "AP", "MIPAnalysis/MIPVsChannel",
-            "FT0: MIP values per channel;Channel ID;MIP value (ADC ch)",
-            sNCHANNELS_PM);
-            
-        mGraphMIPvsChannel->GetXaxis()->SetLimits(-1, sNCHANNELS_PM + 1);
-        mGraphMIPvsChannel->SetMarkerStyle(22);
-        mGraphMIPvsChannel->SetMarkerSize(1.0);
-        mGraphMIPvsChannel->SetMarkerColor(kBlue);
-        mGraphMIPvsChannel->SetLineColor(kBlack);
-        
-        // Add expected MIP reference line
-        auto* mipRefLine = new TLine(-0.5, mMIPExpectedValue, sNCHANNELS_PM + 0.5, mMIPExpectedValue);
-        mipRefLine->SetLineColor(kGreen);
-        mipRefLine->SetLineStyle(2);
-        mipRefLine->SetLineWidth(2);
-        mGraphMIPvsChannel->GetListOfFunctions()->Add(mipRefLine);
-        
-        ILOG(Info, Support) << "Created MIP analysis summary graph" << ENDM;
+
+    // Fill MIP histograms
+    if (!std::isnan(mMIPValues[ch])) {
+      mHistMIPValues->SetBinContent(ch + 1, mMIPValues[ch]);
     }
-    
-    // Update MIP graph data
-    for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
-        mGraphMIPvsChannel->SetPoint(i, mChanX[i], mMIPValues[i]);
-        mGraphMIPvsChannel->SetPointError(i, mChanXErr[i], 0.);
+    if (!std::isnan(mMIPDeviations[ch])) {
+      mHistMIPDeviations->SetBinContent(ch + 1, mMIPDeviations[ch]);
     }
+  }
+
+  // Create MIP summary graph if it doesn't exist
+  if (!mGraphMIPvsChannel) {
+    mGraphMIPvsChannel = helper::registerGraph<TGraphErrors>(
+      getObjectsManager(),
+      quality_control::core::PublicationPolicy::ThroughStop,
+      "AP", "MIPAnalysis/MIPVsChannel",
+      "FT0: MIP values per channel;Channel ID;MIP value (ADC ch)",
+      sNCHANNELS_PM);
+
+    mGraphMIPvsChannel->GetXaxis()->SetLimits(-1, sNCHANNELS_PM + 1);
+    mGraphMIPvsChannel->SetMarkerStyle(22);
+    mGraphMIPvsChannel->SetMarkerSize(1.0);
+    mGraphMIPvsChannel->SetMarkerColor(kBlue);
+    mGraphMIPvsChannel->SetLineColor(kBlack);
+
+    // Add expected MIP reference line
+    auto* mipRefLine = new TLine(-0.5, mMIPExpectedValue, sNCHANNELS_PM + 0.5, mMIPExpectedValue);
+    mipRefLine->SetLineColor(kGreen);
+    mipRefLine->SetLineStyle(2);
+    mipRefLine->SetLineWidth(2);
+    mGraphMIPvsChannel->GetListOfFunctions()->Add(mipRefLine);
+
+    ILOG(Info, Support) << "Created MIP analysis summary graph" << ENDM;
+  }
+
+  // Update MIP graph data
+  for (std::size_t i = 0; i < sNCHANNELS_PM; ++i) {
+    mGraphMIPvsChannel->SetPoint(i, mChanX[i], mMIPValues[i]);
+    mGraphMIPvsChannel->SetPointError(i, mChanXErr[i], 0.);
+  }
 }
 
 void PostProcTask::updateMIPTrends()
 {
-    if (!mEnableMIPTracking || !mHistMIPTrends) return;
-    
-    // Get current time bin (simplified - use last bin)
-    int timeBin = mHistMIPTrends->GetNbinsX();
-    
-    // Fill individual channel trends
-    for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
-        if (!std::isnan(mMIPDeviations[ch]) && ch < static_cast<unsigned int>(mHistMIPTrends->GetNbinsY())) {
-            mHistMIPTrends->SetBinContent(timeBin, ch + 1, mMIPDeviations[ch]);
-        }
+  if (!mEnableMIPTracking || !mHistMIPTrends)
+    return;
+
+  // Get current time bin (simplified - use last bin)
+  int timeBin = mHistMIPTrends->GetNbinsX();
+
+  // Fill individual channel trends
+  for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
+    if (!std::isnan(mMIPDeviations[ch]) && ch < static_cast<unsigned int>(mHistMIPTrends->GetNbinsY())) {
+      mHistMIPTrends->SetBinContent(timeBin, ch + 1, mMIPDeviations[ch]);
     }
+  }
 }
 
 void PostProcTask::logAmplitudeStatistics() const
 {
-    if (mEnableAmplitudeAnalysis) {
-        int totalFits = mSuccessfulFits + mFailedFits;
-        if (totalFits > 0) {
-            ILOG(Info, Support) << "Amplitude analysis: " << mSuccessfulFits << " successful fits ("
-                               << (100.0 * mSuccessfulFits / totalFits) << "%), "
-                               << mFailedFits << " failed fits ("
-                               << (100.0 * mFailedFits / totalFits) << "%)" << ENDM;
-        }
+  if (mEnableAmplitudeAnalysis) {
+    int totalFits = mSuccessfulFits + mFailedFits;
+    if (totalFits > 0) {
+      ILOG(Info, Support) << "Amplitude analysis: " << mSuccessfulFits << " successful fits ("
+                          << (100.0 * mSuccessfulFits / totalFits) << "%), "
+                          << mFailedFits << " failed fits ("
+                          << (100.0 * mFailedFits / totalFits) << "%)" << ENDM;
     }
-    
-    if (mEnableMIPTracking) {
-        int totalMIPChannels = mMIPChannelsInRange + mMIPChannelsOutOfRange;
-        if (totalMIPChannels > 0) {
-            ILOG(Info, Support) << "MIP tracking: " << mMIPChannelsInRange << " channels in range ("
-                               << (100.0 * mMIPChannelsInRange / totalMIPChannels) << "%), "
-                               << mMIPChannelsOutOfRange << " out of range ("
-                               << (100.0 * mMIPChannelsOutOfRange / totalMIPChannels) << "%)" << ENDM;
-        }
+  }
+
+  if (mEnableMIPTracking) {
+    int totalMIPChannels = mMIPChannelsInRange + mMIPChannelsOutOfRange;
+    if (totalMIPChannels > 0) {
+      ILOG(Info, Support) << "MIP tracking: " << mMIPChannelsInRange << " channels in range ("
+                          << (100.0 * mMIPChannelsInRange / totalMIPChannels) << "%), "
+                          << mMIPChannelsOutOfRange << " out of range ("
+                          << (100.0 * mMIPChannelsOutOfRange / totalMIPChannels) << "%)" << ENDM;
     }
+  }
 }
 
 void PostProcTask::update(Trigger trg, framework::ServiceRegistryRef serviceReg)
@@ -456,8 +460,8 @@ void PostProcTask::update(Trigger trg, framework::ServiceRegistryRef serviceReg)
     mHistAmpC->Reset();
     mHistAmpNormPerChannel->Reset();
     if (mEnableMIPTracking) {
-        mHistMIPValues->Reset();
-        mHistMIPDeviations->Reset();
+      mHistMIPValues->Reset();
+      mHistMIPDeviations->Reset();
     }
 
     // Create projections for detector regions
@@ -481,14 +485,14 @@ void PostProcTask::update(Trigger trg, framework::ServiceRegistryRef serviceReg)
       entries += ampForChannel->GetEntries();
     }
     mHistAmpNormPerChannel->SetEntries(entries);
-    
+
     // NEW: Perform enhanced amplitude analysis if enabled
     performAmplitudeAnalysis(hAmpPerChannel.get());
-    
+
     // NEW: Perform MIP analysis if enabled
     if (mEnableAmplitudeAnalysis && mEnableMIPTracking) {
-        performMIPAnalysis();
-        updateMIPTrends();
+      performMIPAnalysis();
+      updateMIPTrends();
     }
   }
   // Times
