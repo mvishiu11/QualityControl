@@ -41,151 +41,162 @@ namespace o2::quality_control_modules::fv0
 
 // Expected gain configuration for different beam types/conditions
 struct ExpectedGainConfig {
-    double value;              ///< Expected gain value
-    std::string name;          ///< Short name for internal use (e.g., "pp", "PbPb", "OO")
-    std::string displayName;   ///< Display name for plots (e.g., "pp collisions", "Pb-Pb collisions")
-    int color;                 ///< ROOT color for this configuration
-    int markerStyle;           ///< ROOT marker style
-    
-    ExpectedGainConfig() : value(15.0), name("default"), displayName("Default"), color(kRed), markerStyle(20) {}
-    
-    ExpectedGainConfig(double val, const std::string& n, const std::string& dn, int col = kRed, int marker = 20)
-        : value(val), name(n), displayName(dn), color(col), markerStyle(marker) {}
+  double value;            ///< Expected gain value
+  std::string name;        ///< Short name for internal use (e.g., "pp", "PbPb", "OO")
+  std::string displayName; ///< Display name for plots (e.g., "pp collisions", "Pb-Pb collisions")
+  int color;               ///< ROOT color for this configuration
+  int markerStyle;         ///< ROOT marker style
+
+  ExpectedGainConfig() : value(15.0), name("default"), displayName("Default"), color(kRed), markerStyle(20) {}
+
+  ExpectedGainConfig(double val, const std::string& n, const std::string& dn, int col = kRed, int marker = 20)
+    : value(val), name(n), displayName(dn), color(col), markerStyle(marker) {}
 };
 
 // Empirical fitting parameters
 struct ChannelFitParams {
-    double leftSliceFrac;   ///< Left slice fraction (replaces mSliceFrac for left side)
-    double rightSliceFrac;  ///< Right slice fraction (replaces mSliceFrac for right side)
-    bool useRebin;          ///< Whether to rebin histogram for this channel
-    int rebinFactor;        ///< Rebin factor if rebinning is enabled
-    std::string label;      ///< Human-readable label for debugging and logging
-    
-    /// Default constructor with fallback parameters (All rings params)
-    ChannelFitParams() 
-        : leftSliceFrac(0.28), rightSliceFrac(0.20), 
-          useRebin(false), rebinFactor(1), label("default") {}
-    
-    /// Constructor with all parameters for custom channel configurations
-    ChannelFitParams(double leftFrac, double rightFrac, 
-                     bool rebin = false, int rebinFac = 1, const std::string& lbl = "custom")
-        : leftSliceFrac(leftFrac), rightSliceFrac(rightFrac),
-          useRebin(rebin), rebinFactor(rebinFac), label(lbl) {}
+  double leftSliceFrac;  ///< Left slice fraction (replaces mSliceFrac for left side)
+  double rightSliceFrac; ///< Right slice fraction (replaces mSliceFrac for right side)
+  bool useRebin;         ///< Whether to rebin histogram for this channel
+  int rebinFactor;       ///< Rebin factor if rebinning is enabled
+  std::string label;     ///< Human-readable label for debugging and logging
+
+  /// Default constructor with fallback parameters (All rings params)
+  ChannelFitParams()
+    : leftSliceFrac(0.28), rightSliceFrac(0.20), useRebin(false), rebinFactor(1), label("default") {}
+
+  /// Constructor with all parameters for custom channel configurations
+  ChannelFitParams(double leftFrac, double rightFrac,
+                   bool rebin = false, int rebinFac = 1, const std::string& lbl = "custom")
+    : leftSliceFrac(leftFrac), rightSliceFrac(rightFrac), useRebin(rebin), rebinFactor(rebinFac), label(lbl) {}
 };
 
 /// Detector geometry mapping for FV0
 /// These enums help translate between linear channel numbers and physical detector positions
-enum class FV0Ring { R1 = 0, R2 = 1, R3 = 2, R4 = 3, R51 = 4, R52 = 5 };
-enum class FV0Sector { A = 0, B = 1, C = 2, D = 3, E = 4, F = 5, G = 6, H = 7 };
+enum class FV0Ring { R1 = 0,
+                     R2 = 1,
+                     R3 = 2,
+                     R4 = 3,
+                     R51 = 4,
+                     R52 = 5 };
+enum class FV0Sector { A = 0,
+                       B = 1,
+                       C = 2,
+                       D = 3,
+                       E = 4,
+                       F = 5,
+                       G = 6,
+                       H = 7 };
 
 /// Helper structure to represent detector position
 struct DetectorPosition {
-    FV0Ring ring;
-    FV0Sector sector;
-    
-    /// Default constructor required for ROOT serialization
-    /// Initializes to Ring R1, Sector A as a safe default
-    DetectorPosition() : ring(FV0Ring::R1), sector(FV0Sector::A) {}
-    
-    /// Constructor with explicit ring and sector specification
-    DetectorPosition(FV0Ring r, FV0Sector s) : ring(r), sector(s) {}
-    
-    /// Generate human-readable string for debugging and logging
-    /// Example output: "D_R51" for Ring 51, Sector D
-    std::string toString() const {
-        const char* ringNames[] = {"R1", "R2", "R3", "R4", "R51", "R52"};
-        const char* sectorNames[] = {"A", "B", "C", "D", "E", "F", "G", "H"};
-        return std::string(sectorNames[static_cast<int>(sector)]) + "_" + 
-               std::string(ringNames[static_cast<int>(ring)]);
-    }
+  FV0Ring ring;
+  FV0Sector sector;
+
+  /// Default constructor required for ROOT serialization
+  /// Initializes to Ring R1, Sector A as a safe default
+  DetectorPosition() : ring(FV0Ring::R1), sector(FV0Sector::A) {}
+
+  /// Constructor with explicit ring and sector specification
+  DetectorPosition(FV0Ring r, FV0Sector s) : ring(r), sector(s) {}
+
+  /// Generate human-readable string for debugging and logging
+  /// Example output: "D_R51" for Ring 51, Sector D
+  std::string toString() const
+  {
+    const char* ringNames[] = { "R1", "R2", "R3", "R4", "R51", "R52" };
+    const char* sectorNames[] = { "A", "B", "C", "D", "E", "F", "G", "H" };
+    return std::string(sectorNames[static_cast<int>(sector)]) + "_" +
+           std::string(ringNames[static_cast<int>(ring)]);
+  }
 };
 
 class AmplitudePostProcTask final : public quality_control::postprocessing::PostProcessingInterface
 {
-public:
-    AmplitudePostProcTask() = default;
-    ~AmplitudePostProcTask() override = default;
-    
-    void configure(const boost::property_tree::ptree& config) override;
-    void initialize(quality_control::postprocessing::Trigger trigger,
-                   framework::ServiceRegistryRef services) override;
-    void update(quality_control::postprocessing::Trigger trigger,
-               framework::ServiceRegistryRef services) override;
-    void finalize(quality_control::postprocessing::Trigger trigger,
-                 framework::ServiceRegistryRef services) override;
+ public:
+  AmplitudePostProcTask() = default;
+  ~AmplitudePostProcTask() override = default;
 
-private:
-    o2::quality_control_modules::fit::PostProcHelper mPostProcHelper;
-    
-    void reset();
-    void setTimestampToMOs();
-    
-    // Empirical fitting
-    void initializeEmpiricalParameters();
-    DetectorPosition getChannelPosition(unsigned int channel) const;
-    ChannelFitParams getChannelFitParams(unsigned int channel) const;
-    std::pair<double, double> calculateFitWindow(unsigned int channel, double peak, 
-                                                int peakBin, TH1D* histogram) const;
-    void logFittingStatistics() const;
-    
-    // Expected gain configuration methods
-    void configureExpectedGains(const boost::property_tree::ptree& config);
-    void createGraphsForConfigurations();
-    void updateGraphsWithData();
-    void applyStyling();
+  void configure(const boost::property_tree::ptree& config) override;
+  void initialize(quality_control::postprocessing::Trigger trigger,
+                  framework::ServiceRegistryRef services) override;
+  void update(quality_control::postprocessing::Trigger trigger,
+              framework::ServiceRegistryRef services) override;
+  void finalize(quality_control::postprocessing::Trigger trigger,
+                framework::ServiceRegistryRef services) override;
 
-    // Trending
-    void initializeTrendingHistograms();
-    void updateTrendingHistograms();
-    
-    // Configuration & constants
-    static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
-    
-    // Configuration parameters
-    int mAmpMin{-100};                    ///< Histogram ADC min
-    int mAmpMax{4100};                    ///< Histogram ADC max
-    int mAmpBins{4200};                   ///< Histogram bins
-    double mSliceFrac{0.25};              ///< Fallback fit window half-width (fraction of peak)
-    bool mUseEmpiricalFitting{true};      ///< Enable empirical fitting parameters
-    bool mUseFallbackFitting{true};       ///< Enable fallback to fractional window
-    bool mTrendEnabled{false};            ///< Enable trending functionality
-    std::string mTrendScalarsFolder{"TrendsScalars"}; ///< Folder name for trending scalars
-    
-    // Expected gain configurations (replaces single mExpectedGain)
-    std::vector<ExpectedGainConfig> mExpectedGainConfigs;
-    
-    // QC managed objects
-    std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
-    std::unique_ptr<TH1F> mHistAmpAll;
-    std::unique_ptr<TH1F> mHistAmpNormPerChannel;
-    
-    // Gaussian fit results
-    std::array<double, sNCHANNELS_PM> mMean{};
-    std::array<double, sNCHANNELS_PM> mSigma{};
-    std::array<double, sNCHANNELS_PM> mChanX{};
-    std::array<double, sNCHANNELS_PM> mChanXErr{};
-    std::array<double, sNCHANNELS_PM> mHistMean{};   ///< ⟨ADC⟩ of full distribution
-    std::array<double, sNCHANNELS_PM> mMeanRatio{};  ///< ⟨ADC⟩ / μ_Gauss
+ private:
+  o2::quality_control_modules::fit::PostProcHelper mPostProcHelper;
 
-    // Multiple Gaussian error graphs (one per configuration)
-    std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
-    std::unique_ptr<TGraphErrors> mGraphHistMean;
-    std::unique_ptr<TGraphErrors> mGraphMeanRatio;
+  void reset();
+  void setTimestampToMOs();
 
-    // Trending histograms
-    std::unique_ptr<TH1F> mTrendingFittedMeans;     ///< MPV per channel (single histogram)
-    std::unique_ptr<TH1F> mTrendingRawMeans;        ///< Raw mean per channel (single histogram)
-    std::unique_ptr<TH1F> mTrendingMeanRatios;      ///< Ratio per channel (single histogram)
-    
-    // Empirical fitting data structures
-    std::map<unsigned int, ChannelFitParams> mChannelFitParams;  ///< Channel-specific fitting parameters
-    ChannelFitParams mDefaultFitParams;                          ///< Default parameters for unmapped channels
-    std::map<unsigned int, DetectorPosition> mChannelMapping;    ///< Maps channel numbers to detector positions
-    
-    // Statistics tracking
-    mutable int mEmpiricalFitsUsed{0};    ///< Counter for empirical fits applied
-    mutable int mFallbackFitsUsed{0};     ///< Counter for fallback fits applied
-    mutable int mFailedFits{0};           ///< Counter for failed fits
+  // Empirical fitting
+  void initializeEmpiricalParameters();
+  DetectorPosition getChannelPosition(unsigned int channel) const;
+  ChannelFitParams getChannelFitParams(unsigned int channel) const;
+  std::pair<double, double> calculateFitWindow(unsigned int channel, double peak,
+                                               int peakBin, TH1D* histogram) const;
+  void logFittingStatistics() const;
+
+  // Expected gain configuration methods
+  void configureExpectedGains(const boost::property_tree::ptree& config);
+  void createGraphsForConfigurations();
+  void updateGraphsWithData();
+  void applyStyling();
+
+  // Trending
+  void initializeTrendingHistograms();
+  void updateTrendingHistograms();
+
+  // Configuration & constants
+  static constexpr std::size_t sNCHANNELS_PM = o2::fv0::Constants::nFv0ChannelsPlusRef;
+
+  // Configuration parameters
+  int mAmpMin{ -100 };                                ///< Histogram ADC min
+  int mAmpMax{ 4100 };                                ///< Histogram ADC max
+  int mAmpBins{ 4200 };                               ///< Histogram bins
+  double mSliceFrac{ 0.25 };                          ///< Fallback fit window half-width (fraction of peak)
+  bool mUseEmpiricalFitting{ true };                  ///< Enable empirical fitting parameters
+  bool mUseFallbackFitting{ true };                   ///< Enable fallback to fractional window
+  bool mTrendEnabled{ false };                        ///< Enable trending functionality
+  std::string mTrendScalarsFolder{ "TrendsScalars" }; ///< Folder name for trending scalars
+
+  // Expected gain configurations (replaces single mExpectedGain)
+  std::vector<ExpectedGainConfig> mExpectedGainConfigs;
+
+  // QC managed objects
+  std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
+  std::unique_ptr<TH1F> mHistAmpAll;
+  std::unique_ptr<TH1F> mHistAmpNormPerChannel;
+
+  // Gaussian fit results
+  std::array<double, sNCHANNELS_PM> mMean{};
+  std::array<double, sNCHANNELS_PM> mSigma{};
+  std::array<double, sNCHANNELS_PM> mChanX{};
+  std::array<double, sNCHANNELS_PM> mChanXErr{};
+  std::array<double, sNCHANNELS_PM> mHistMean{};  ///< ⟨ADC⟩ of full distribution
+  std::array<double, sNCHANNELS_PM> mMeanRatio{}; ///< ⟨ADC⟩ / μ_Gauss
+
+  // Multiple Gaussian error graphs (one per configuration)
+  std::vector<std::unique_ptr<TGraphErrors>> mGraphsMPVPerConfig;
+  std::unique_ptr<TGraphErrors> mGraphHistMean;
+  std::unique_ptr<TGraphErrors> mGraphMeanRatio;
+
+  // Trending histograms
+  std::unique_ptr<TH1F> mTrendingFittedMeans; ///< MPV per channel (single histogram)
+  std::unique_ptr<TH1F> mTrendingRawMeans;    ///< Raw mean per channel (single histogram)
+  std::unique_ptr<TH1F> mTrendingMeanRatios;  ///< Ratio per channel (single histogram)
+
+  // Empirical fitting data structures
+  std::map<unsigned int, ChannelFitParams> mChannelFitParams; ///< Channel-specific fitting parameters
+  ChannelFitParams mDefaultFitParams;                         ///< Default parameters for unmapped channels
+  std::map<unsigned int, DetectorPosition> mChannelMapping;   ///< Maps channel numbers to detector positions
+
+  // Statistics tracking
+  mutable int mEmpiricalFitsUsed{ 0 }; ///< Counter for empirical fits applied
+  mutable int mFallbackFitsUsed{ 0 };  ///< Counter for fallback fits applied
+  mutable int mFailedFits{ 0 };        ///< Counter for failed fits
 };
 
 } // namespace o2::quality_control_modules::fv0

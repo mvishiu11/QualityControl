@@ -23,7 +23,7 @@
 
 namespace o2::quality_control_modules::fv0
 {
-  
+
 class AutoTrendingTask : public o2::quality_control::postprocessing::TrendingTask
 {
  public:
