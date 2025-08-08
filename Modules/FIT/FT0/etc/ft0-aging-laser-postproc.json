@@ -60,6 +60,7 @@
 
         "resumeTrend": "true",
         "producePlotsOnUpdate": "true",
+        "colorPalette": "1",
 
         "dataSources": [
           {
@@ -137,25 +138,27 @@
         "plots": [
           {
             "name":   "ft0_aging_laser_A",
-            "title":  "FT0 Aging: A-side (ch 1-96)",
+            "title":  "FT0 Aging Monitoring: A-side (ch 1-96)",
             "varexp": "AmpPerChannelNormWeightedMeanA.meanY:multigraphtime",
             "selection": "",
-            "option": "*APL *PLC *PMC",
-            "graphAxisLabel": "ADCs:time",
-            "graphYRange": "0:2",
+            "option": "A*L PMC PLC",
+            "graphAxisLabel": ":",
+            "graphYRange": "0:1.5",
             "legendNColums": "12",
-            "legendTextSize": "0.018"
+            "legendTextSize": "0.018",
+            "colorPalette": "1"
           },
           {
             "name":   "ft0_aging_laser_C",
-            "title":  "FT0 Aging: C-side (ch 97-208)",
+            "title":  "FT0 Aging Monitoring: C-side (ch 97-208)",
             "varexp": "AmpPerChannelNormWeightedMeanC.meanY:multigraphtime",
             "selection": "",
-            "option": "*APL *PLC *PMC",
-            "graphAxisLabel": "ADCs:time",
-            "graphYRange": "0:2",
+            "option": "A*L PMC PLC",
+            "graphAxisLabel": ":",
+            "graphYRange": "0:1.5",
             "legendNColums": "14",
-            "legendTextSize": "0.018"
+            "legendTextSize": "0.018",
+            "colorPalette": "1"
           }
         ],
 

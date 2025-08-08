@@ -81,7 +81,7 @@ void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
     getObjectsManager(),
     quality_control::core::PublicationPolicy::ThroughStop,
     "", "AmpPerChannelNormWeightedMeanC", "AmpPerChannelNormWeightedMeanC",
-    112, 96, 207);
+    112, 96, 208);
 }
 
 //--------------------------------------------------------------------
