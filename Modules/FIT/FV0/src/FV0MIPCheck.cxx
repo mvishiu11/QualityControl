@@ -88,7 +88,7 @@ void FV0MIPCheck::beautify(std::shared_ptr<MonitorObject> mo, Quality q)
   if (q != Quality::Good) {
     msg->AddText("FV0 gain calibration failing, please make log entry and tag FV0, FIT");
   } else {
-    msg->AddText("FV0 gain calibration passing");
+    msg->AddText("FV0 gain calibration OK");
   }
   msg->SetFillColor(q == Quality::Good   ? kGreen :
                     q == Quality::Medium ? kOrange : kGray);
