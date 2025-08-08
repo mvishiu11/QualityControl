@@ -338,9 +338,11 @@ void AmplitudePostProcTask::applyStyling()
 
     // Clear and add reference lines
     graph->GetListOfFunctions()->Clear();
+    const double xmin = graph->GetXaxis()->GetXmin();
+    const double xmax = graph->GetXaxis()->GetXmax();
 
     // Main reference line (expected value)
-    auto* refLine = new TLine(-0.5, config.value, sNCHANNELS_PM + 0.5, config.value);
+    auto* refLine = new TLine(xmin, config.value, xmax, config.value);
     refLine->SetLineColor(kBlue + 2);
     refLine->SetLineStyle(2);
     refLine->SetLineWidth(2);

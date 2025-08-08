@@ -84,10 +84,11 @@ void FV0MIPCheck::beautify(std::shared_ptr<MonitorObject> mo, Quality q)
 
   TPaveText* msg = new TPaveText(0.15, 0.82, 0.85, 0.92, "NDC");
   msg->SetTextAlign(12);
-  msg->AddText(Form("deviation = %.2f  (tol = %.2f)\n", mMaxDeviation, mToleranceADC));
+  msg->AddText(Form("deviation = %.2f  (tolerance = %.2f)\n", mMaxDeviation, mToleranceADC));
   if (q != Quality::Good) {
-    msg->AddText("FV0 gain calibration failing,"
-                 "please make log entry and tag FV0, FIT");
+    msg->AddText("FV0 gain calibration failing, please make log entry and tag FV0, FIT");
+  } else {
+    msg->AddText("FV0 gain calibration passing");
   }
   msg->SetFillColor(q == Quality::Good   ? kGreen :
                     q == Quality::Medium ? kOrange : kGray);
