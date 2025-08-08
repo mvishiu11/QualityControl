@@ -304,9 +304,8 @@ void AmplitudePostProcTask::createGraphsForConfigurations()
     const auto& config = mExpectedGainConfigs[i];
 
     // Create unique name for each graph
-    std::string graphName = Form("GaussianSummary/MeanVsChannel_%s", config.name.c_str());
-    std::string graphTitle = Form("FV0: Gaussian Mean vs Channel - %s;Channel ID;#mu (ADC channels)",
-                                  config.displayName.c_str());
+    std::string graphName = Form("MIPVsChannel");
+    std::string graphTitle = Form("FV0: MIP vs Channel;Channel ID;MIP ADC(ch)");
 
     auto graph = helper::registerGraph<TGraphErrors>(
       getObjectsManager(),
@@ -331,13 +330,10 @@ void AmplitudePostProcTask::applyStyling()
 
     // Set axis limits and ranges
     graph->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
-    graph->GetYaxis()->SetRangeUser(0.3 * config.value, 1.7 * config.value);
-
-    // Set marker and line styling
-    graph->SetMarkerStyle(config.markerStyle);
+    graph->GetYaxis()->SetRangeUser(config.value - 2, config.value + 2);
     graph->SetMarkerSize(1.2);
-    graph->SetMarkerColor(config.color);
-    graph->SetLineColor(config.color);
+    graph->SetMarkerStyle(8);
+    graph->SetMarkerColor(kBlack);
     graph->SetLineWidth(2);
 
     // Clear and add reference lines
@@ -349,30 +345,6 @@ void AmplitudePostProcTask::applyStyling()
     refLine->SetLineStyle(2);
     refLine->SetLineWidth(2);
     graph->GetListOfFunctions()->Add(refLine);
-
-    // Warning zones (±1 from expected) - yellow-orange
-    auto* warningLineLow = new TLine(-0.5, config.value - 1, sNCHANNELS_PM + 0.5, config.value - 1);
-    auto* warningLineHigh = new TLine(-0.5, config.value + 1, sNCHANNELS_PM + 0.5, config.value + 1);
-    warningLineLow->SetLineColor(kOrange + 2);
-    warningLineLow->SetLineStyle(3);
-    warningLineLow->SetLineWidth(2);
-    warningLineHigh->SetLineColor(kOrange + 2);
-    warningLineHigh->SetLineStyle(3);
-    warningLineHigh->SetLineWidth(2);
-    graph->GetListOfFunctions()->Add(warningLineLow);
-    graph->GetListOfFunctions()->Add(warningLineHigh);
-
-    // Error zones (±2 from expected) - red
-    auto* errorLineLow = new TLine(-0.5, config.value - 2, sNCHANNELS_PM + 0.5, config.value - 2);
-    auto* errorLineHigh = new TLine(-0.5, config.value + 2, sNCHANNELS_PM + 0.5, config.value + 2);
-    errorLineLow->SetLineColor(kRed);
-    errorLineLow->SetLineStyle(9);
-    errorLineLow->SetLineWidth(1);
-    errorLineHigh->SetLineColor(kRed);
-    errorLineHigh->SetLineStyle(9);
-    errorLineHigh->SetLineWidth(1);
-    graph->GetListOfFunctions()->Add(errorLineLow);
-    graph->GetListOfFunctions()->Add(errorLineHigh);
   }
 }
 
