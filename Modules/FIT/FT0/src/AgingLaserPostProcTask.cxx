@@ -4,7 +4,7 @@
 //
 ///
 /// \file   AgingLaserPostProcTask.cxx
-/// \author Jakub Muszyński <jakub.milosz.muszynski@cern.ch>, Andreas Molander <andreas.molander@cern.ch>
+/// \author Andreas Molander <andreas.molander@cern.ch>, Jakub Muszyński <jakub.milosz.muszynski@cern.ch>
 ///
 
 #include "FT0/AgingLaserPostProcTask.h"
@@ -38,7 +38,7 @@ void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
   /* ---- read configuration ---- */
 
   const std::string detChs = o2::quality_control_modules::common::getFromConfig<std::string>(
-      mCustomParameters, "detectorChannelIDs", "");
+    mCustomParameters, "detectorChannelIDs", "");
   if (!detChs.empty()) {
     mDetectorChIDs = fit::helper::parseParameters<uint8_t>(detChs, ",");
   } else { // default: all detector channels 0–207
@@ -47,40 +47,41 @@ void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
   }
 
   const std::string refChs = o2::quality_control_modules::common::getFromConfig<std::string>(
-      mCustomParameters, "referenceChannelIDs", "");
+    mCustomParameters, "referenceChannelIDs", "");
   if (!refChs.empty()) {
     mReferenceChIDs = fit::helper::parseParameters<uint8_t>(refChs, ",");
   } else { // default: 208–210
-    for (uint8_t ch = 208; ch < 211; ++ch) mReferenceChIDs.push_back(ch);
+    for (uint8_t ch = 208; ch < 211; ++ch)
+      mReferenceChIDs.push_back(ch);
   }
 
   mADCSearchMin = o2::quality_control_modules::common::getFromConfig<double>(
-      mCustomParameters, "adcSearchMin", mADCSearchMin);
+    mCustomParameters, "adcSearchMin", mADCSearchMin);
   mADCSearchMax = o2::quality_control_modules::common::getFromConfig<double>(
-      mCustomParameters, "adcSearchMax", mADCSearchMax);
-  mFracWindowA  = o2::quality_control_modules::common::getFromConfig<double>(
-      mCustomParameters, "fracWindowA",  mFracWindowA);
-  mFracWindowB  = o2::quality_control_modules::common::getFromConfig<double>(
-      mCustomParameters, "fracWindowB",  mFracWindowB);
+    mCustomParameters, "adcSearchMax", mADCSearchMax);
+  mFracWindowA = o2::quality_control_modules::common::getFromConfig<double>(
+    mCustomParameters, "fracWindowA", mFracWindowA);
+  mFracWindowB = o2::quality_control_modules::common::getFromConfig<double>(
+    mCustomParameters, "fracWindowB", mFracWindowB);
 
-  ILOG(Info) << "detector channels  : " << detChs  << ENDM;
-  ILOG(Info) << "reference channels : " << refChs  << ENDM;
+  ILOG(Info) << "detector channels  : " << detChs << ENDM;
+  ILOG(Info) << "reference channels : " << refChs << ENDM;
   ILOG(Info) << "ADC search window  : [" << mADCSearchMin << ", " << mADCSearchMax << "]" << ENDM;
   ILOG(Info) << "fractional window  : a=" << mFracWindowA << "  b=" << mFracWindowB << ENDM;
 
   /* ---- book output histogram ---- */
 
   mAmpVsChNormWeightedMeanA = fit::helper::registerHist<TH1F>(
-      getObjectsManager(),
-      quality_control::core::PublicationPolicy::ThroughStop,
-      "", "AmpPerChannelNormWeightedMeanA", "AmpPerChannelNormWeightedMeanA",
-      96, 0, 96);
+    getObjectsManager(),
+    quality_control::core::PublicationPolicy::ThroughStop,
+    "", "AmpPerChannelNormWeightedMeanA", "AmpPerChannelNormWeightedMeanA",
+    96, 0, 96);
 
   mAmpVsChNormWeightedMeanC = fit::helper::registerHist<TH1F>(
-      getObjectsManager(),
-      quality_control::core::PublicationPolicy::ThroughStop,
-      "", "AmpPerChannelNormWeightedMeanC", "AmpPerChannelNormWeightedMeanC",
-      112, 96, 207);
+    getObjectsManager(),
+    quality_control::core::PublicationPolicy::ThroughStop,
+    "", "AmpPerChannelNormWeightedMeanC", "AmpPerChannelNormWeightedMeanC",
+    112, 96, 207);
 }
 
 //--------------------------------------------------------------------
@@ -90,9 +91,9 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
   mAmpVsChNormWeightedMeanC->Reset();
 
   /* ---- fetch source histogram ---- */
-  auto& qcdb   = srv.get<quality_control::repository::DatabaseInterface>();
-  auto   moIn  = qcdb.retrieveMO("FT0/MO/AgingLaser", "AmpPerChannel", t.timestamp, t.activity);
-  TH2*   h2amp = moIn ? dynamic_cast<TH2*>(moIn->getObject()) : nullptr;
+  auto& qcdb = srv.get<quality_control::repository::DatabaseInterface>();
+  auto moIn = qcdb.retrieveMO("FT0/MO/AgingLaser", "AmpPerChannel", t.timestamp, t.activity);
+  TH2* h2amp = moIn ? dynamic_cast<TH2*>(moIn->getObject()) : nullptr;
 
   if (!h2amp) {
     ILOG(Error) << "Could not retrieve FT0/MO/AgingLaser/AmpPerChannel for timestamp "
@@ -105,20 +106,22 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
 
   for (auto chId : mReferenceChIDs) {
     auto h1 = std::unique_ptr<TH1>(h2amp->ProjectionY(
-        Form("ref_%d", chId), chId + 1, chId + 1));
+      Form("ref_%d", chId), chId + 1, chId + 1));
 
-    const int binLow  = h1->FindBin(mADCSearchMin);
+    const int binLow = h1->FindBin(mADCSearchMin);
     const int binHigh = h1->FindBin(mADCSearchMax);
 
     int binMax = binLow;
     for (int b = binLow + 1; b <= binHigh; ++b) {
-      if (h1->GetBinContent(b) > h1->GetBinContent(binMax)) { binMax = b; }
+      if (h1->GetBinContent(b) > h1->GetBinContent(binMax)) {
+        binMax = b;
+      }
     }
     const double xMax = h1->GetBinCenter(binMax);
     const double winLo = TMath::Max(0., (1. - mFracWindowA) * xMax);
     const double winHi = (1. + mFracWindowB) * xMax;
 
-    TF1 g("g","gaus", winLo, winHi);
+    TF1 g("g", "gaus", winLo, winHi);
     if (h1->Fit(&g, "QNRS") == 0) { // 0 = fit OK
       refMus.push_back(g.GetParameter(1));
     } else {
@@ -134,9 +137,9 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
   const double norm = std::accumulate(refMus.begin(), refMus.end(), 0.) / nRef;
 
   /* ---- 2. Loop over ALL channels ---- */
-  auto processChannel = [&](uint8_t chId){
+  auto processChannel = [&](uint8_t chId) {
     auto h1 = std::unique_ptr<TH1>(h2amp->ProjectionY(
-        Form("proj_%d", chId), chId + 1, chId + 1));
+      Form("proj_%d", chId), chId + 1, chId + 1));
 
     // global maximum (whole histogram)
     const int binMax = h1->GetMaximumBin();
@@ -155,12 +158,16 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
     }
 
     const double wMean = (den > 0.) ? num / den : 0.;
-    const double val   = (norm > 0.) ? wMean / norm : 0.;
-    if (chId < 96) { mAmpVsChNormWeightedMeanA->SetBinContent(chId + 1, val); }
-    else if (chId >= 96 && chId <= 208) { mAmpVsChNormWeightedMeanC->SetBinContent(chId - 95, val); }
+    const double val = (norm > 0.) ? wMean / norm : 0.;
+    if (chId < 96) {
+      mAmpVsChNormWeightedMeanA->SetBinContent(chId + 1, val);
+    } else if (chId >= 96 && chId <= 208) {
+      mAmpVsChNormWeightedMeanC->SetBinContent(chId - 95, val);
+    }
   };
 
-  for (uint8_t ch = 0; ch < sNCHANNELS_PM; ++ch) processChannel(ch);
+  for (uint8_t ch = 0; ch < sNCHANNELS_PM; ++ch)
+    processChannel(ch);
 
   /* ---- log some stats ---- */
   ILOG(Info) << "update done – " << nRef << " reference fits, norm=" << norm << ENDM;

@@ -27,7 +27,7 @@ namespace o2::quality_control_modules::ft0
 
 class AmplitudePostProcTask final : public quality_control::postprocessing::PostProcessingInterface
 {
-public:
+ public:
   AmplitudePostProcTask() = default;
   ~AmplitudePostProcTask() override = default;
 
@@ -39,7 +39,7 @@ public:
   void finalize(quality_control::postprocessing::Trigger trigger,
                 framework::ServiceRegistryRef services) override;
 
-private:
+ private:
   // ---------- helpers ----------
   void reset();
   void setTimestampToMOs();
@@ -58,34 +58,34 @@ private:
   static constexpr std::size_t sNCHANNELS_PM = o2::ft0::Constants::sNCHANNELS_PM;
 
   // histogram ADC range
-  int mAmpMin{-100};
-  int mAmpMax{4100};
-  int mAmpBins{4200};
+  int mAmpMin{ -100 };
+  int mAmpMax{ 4100 };
+  int mAmpBins{ 4200 };
 
   // fixed fractional window (relative to peak position)
-  double mLeftSliceFrac{0.15};
-  double mRightSliceFrac{0.15};
+  double mLeftSliceFrac{ 0.15 };
+  double mRightSliceFrac{ 0.15 };
 
   // weighted mean bin cut (ignore bins with < N entries)
-  int mMinBinEntriesForWeight{1};
+  int mMinBinEntriesForWeight{ 1 };
 
   // expected gain (ADC/MIP) for scaling / reference
-  double mExpectedGain{14.0};
+  double mExpectedGain{ 14.0 };
 
   // trending (persistent, per-run scalars)
-  bool mTrendEnabled{true};
-  int mTrendMaxPoints{10}; // (kept if you later add in-process graphs)
-  std::string mTrendScalarsFolder{"TrendsScalars"}; // base folder inside our task path
+  bool mTrendEnabled{ true };
+  int mTrendMaxPoints{ 10 };                          // (kept if you later add in-process graphs)
+  std::string mTrendScalarsFolder{ "TrendsScalars" }; // base folder inside our task path
 
   // ---------- managed objects ----------
   // per-channel histograms
   std::map<unsigned int, std::unique_ptr<TH1F>> mMapHistAmpPerChannel;
 
   // region histograms
-  std::unique_ptr<TH1F> mHistAmpAll;     // 0-207
-  std::unique_ptr<TH1F> mHistAmpAInner;  // 0-31
-  std::unique_ptr<TH1F> mHistAmpAOuter;  // 32-95
-  std::unique_ptr<TH1F> mHistAmpC;       // 96-207
+  std::unique_ptr<TH1F> mHistAmpAll;    // 0-207
+  std::unique_ptr<TH1F> mHistAmpAInner; // 0-31
+  std::unique_ptr<TH1F> mHistAmpAOuter; // 32-95
+  std::unique_ptr<TH1F> mHistAmpC;      // 96-207
   std::unique_ptr<TH1F> mHistAmpNormPerChannel;
   std::unique_ptr<TH1F> mHLastAInner, mHLastAOuter, mHLastC, mHLastAll;
   std::unique_ptr<TH1F> mTrendAInner, mTrendAOuter, mTrendC, mTrendAll;
@@ -94,19 +94,19 @@ private:
   std::unique_ptr<TGraphErrors> mGraphMeanNormVsChannel;
 
   // ---------- per-channel storage ----------
-  std::array<double, sNCHANNELS_PM> mMeanW{};    // weighted mean
+  std::array<double, sNCHANNELS_PM> mMeanW{}; // weighted mean
   std::array<double, sNCHANNELS_PM> mChanX{};
   std::array<double, sNCHANNELS_PM> mChanXErr{};
 
   // ---------- per-region last-fit results (Gaussian) ----------
-  double mMuAInner{std::numeric_limits<double>::quiet_NaN()};
-  double mMuAOuter{std::numeric_limits<double>::quiet_NaN()};
-  double mMuC{std::numeric_limits<double>::quiet_NaN()};
-  double mMuAll{std::numeric_limits<double>::quiet_NaN()};
-  double mSigAInner{0.}, mSigAOuter{0.}, mSigC{0.}, mSigAll{0.};
+  double mMuAInner{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuAOuter{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuC{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuAll{ std::numeric_limits<double>::quiet_NaN() };
+  double mSigAInner{ 0. }, mSigAOuter{ 0. }, mSigC{ 0. }, mSigAll{ 0. };
 
   // path to DigitQcTask MOs (to fetch AmpPerChannel)
-  std::string mPathDigitQcTask{"FT0/MO/Digits/"};
+  std::string mPathDigitQcTask{ "FT0/MO/Digits/" };
 
   // PostProc helper
   o2::quality_control_modules::fit::PostProcHelper mPostProcHelper;
