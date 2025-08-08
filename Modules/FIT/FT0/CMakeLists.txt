@@ -9,6 +9,7 @@ target_sources(O2QcFT0 PRIVATE src/AgingLaserTask.cxx
                                src/FractionCheck.cxx
                                src/PostProcTask.cxx
                                src/AmplitudePostProcTask.cxx
+                               src/AgingLaserPostProcTask.cxx
                                src/OutOfBunchCollCheck.cxx
                                src/MergedTreeCheck.cxx
                                src/RecPointsQcTask.cxx
@@ -38,6 +39,7 @@ add_root_dictionary(O2QcFT0
           include/FT0/DigitQcTask.h
           include/FT0/PostProcTask.h
           include/FT0/AmplitudePostProcTask.h
+          include/FT0/AgingLaserPostProcTask.h
           include/FT0/CFDEffCheck.h
           include/FT0/FractionCheck.h
           include/FT0/OutOfBunchCollCheck.h
