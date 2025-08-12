@@ -12,6 +12,7 @@
 #pragma link C++ class o2::quality_control_modules::ft0::FractionCheck + ;
 #pragma link C++ class o2::quality_control_modules::ft0::OutOfBunchCollCheck + ;
 #pragma link C++ class o2::quality_control_modules::ft0::RecPointsQcTask + ;
+#pragma link C++ class o2::quality_control_modules::ft0::AmplitudePostProcTask + ;
 
 #pragma link C++ class o2::quality_control_modules::ft0::AgingLaserTask + ;
 

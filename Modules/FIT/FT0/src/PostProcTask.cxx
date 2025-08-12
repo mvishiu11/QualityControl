@@ -21,6 +21,7 @@
 #include "DataFormatsFT0/Digit.h"
 #include "DataFormatsFT0/ChannelData.h"
 
+#include <TF1.h>
 #include <TH1F.h>
 #include <TH2F.h>
 #include <TCanvas.h>
@@ -59,6 +60,11 @@ void PostProcTask::configure(const boost::property_tree::ptree& config)
   mAsynchChannelLogic = helper::getConfigFromPropertyTree<std::string>(config, cfgPath("asynchChannelLogic"), "standard");
   mIsFirstIter = true; // to be sure
 
+  // Trending related configs
+  mTrendEnabled = helper::getConfigFromPropertyTree<bool>(config, cfgPath("trendEnabled"), false);
+  mLeftSliceFrac = helper::getConfigFromPropertyTree<double>(config, cfgPath("leftSliceFrac"), 0.15);
+  mRightSliceFrac = helper::getConfigFromPropertyTree<double>(config, cfgPath("rightSliceFrac"), 0.15);
+
   // TO REMOVE
   // VERY BAD SOLUTION, YOU SHOULDN'T USE IT
   const std::string del = ",";
@@ -89,6 +95,11 @@ void PostProcTask::reset()
   mHistAmpC.reset();
   mHistAmpNormPerChannel.reset();
   mMapHistsToDecompose.clear();
+  mTrendAInner.reset();
+  mTrendAOuter.reset();
+  mTrendC.reset();
+  mTrendAll.reset();
+  mMuAInner = mMuAOuter = mMuC = mMuAll = std::numeric_limits<double>::quiet_NaN();
 }
 
 void PostProcTask::initialize(Trigger trg, framework::ServiceRegistryRef services)
@@ -115,6 +126,29 @@ void PostProcTask::initialize(Trigger trg, framework::ServiceRegistryRef service
   mHistAmpNormPerChannel = helper::registerHist<TH1F>(getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "", "AmpNormPerChannel", "FT0 channel amplitudes normalized per channel (ch 0-207);Channel amplitude (ADC ch);#sum_{ch}AmpHist_{ch} #times (1/counts_{ch})", 4200, -100, 4100);
   mHistAmpNormPerChannel->Sumw2(kFALSE);
   mChannelGeometry.init(-200., 200., -200., 200., 10.); // values - borders for hist and margin
+
+  // Trending
+  if (mTrendEnabled) {
+    mTrendAInner = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
+      "", "TrendsScalars/AInner", "A-side inner amplitude trend;Time;Mean amplitude (ADC)", 
+      1, -100, 4100);
+    
+    mTrendAOuter = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
+      "", "TrendsScalars/AOuter", "A-side outer amplitude trend;Time;Mean amplitude (ADC)", 
+      1, -100, 4100);
+    
+    mTrendC = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
+      "", "TrendsScalars/C", "C-side amplitude trend;Time;Mean amplitude (ADC)", 
+      1, -100, 4100);
+    
+    mTrendAll = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
+      "", "TrendsScalars/All", "All channels amplitude trend;Time;Mean amplitude (ADC)", 
+      1, -100, 4100);
+  }
 
   mHistStatsSideA = mChannelGeometry.makeHistSideA("GeoChannelStatA", "Channel occupancy, side-A");
   mHistStatsSideC = mChannelGeometry.makeHistSideC("GeoChannelStatC", "Channel occupancy, side-C");
@@ -213,7 +247,25 @@ void PostProcTask::update(Trigger trg, framework::ServiceRegistryRef serviceReg)
       entries += ampForChannel->GetEntries();
     }
     mHistAmpNormPerChannel->SetEntries(entries);
+
+    if (mTrendEnabled) {
+      // Create temporary "all channels" histogram for fitting
+      auto histAmpAll = std::make_unique<TH1F>("tempAll", "temp", 4200, -100, 4100);
+      histAmpAll->Add(mHistAmpAInner.get());
+      histAmpAll->Add(mHistAmpAOuter.get());
+      histAmpAll->Add(mHistAmpC.get());
+      
+      // Perform Gaussian fits on amplitude regions
+      double sigma; // unused but required by function signature
+      fitRegionGaussian(mHistAmpAInner.get(), mMuAInner, sigma);
+      fitRegionGaussian(mHistAmpAOuter.get(), mMuAOuter, sigma);
+      fitRegionGaussian(mHistAmpC.get(), mMuC, sigma);
+      fitRegionGaussian(histAmpAll.get(), mMuAll, sigma);
+      
+      updateTrendingScalars();
+    }
   }
+
   // Times
   auto hTimePerChannel = mPostProcHelper.template getObject<TH2F>("TimePerChannel");
   if (hTimePerChannel) {
@@ -391,6 +443,66 @@ void PostProcTask::setTimestampToMOs()
     auto mo = getObjectsManager()->getMonitorObject(iObj);
     mo->addOrUpdateMetadata(mPostProcHelper.mTimestampMetaField, std::to_string(mPostProcHelper.mTimestampAnchor));
   }
+}
+
+std::pair<double, double> PostProcTask::computeWindow(double peak) const
+{
+  double xmin = std::max<double>(peak - mLeftSliceFrac * std::abs(peak), -100.0);
+  double xmax = std::min<double>(peak + mRightSliceFrac * std::abs(peak), 4100.0);
+  
+  if (xmax <= xmin) {
+    xmin = std::max<double>(peak - 1.0, -100.0);
+    xmax = std::min<double>(peak + 1.0, 4100.0);
+  }
+  
+  return { xmin, xmax };
+}
+
+bool PostProcTask::fitRegionGaussian(TH1F* regionHist, double& outMu, double& outSigma) const
+{
+  if (!regionHist || regionHist->GetEntries() < 50) {
+    outMu = std::numeric_limits<double>::quiet_NaN();
+    outSigma = 0.;
+    return false;
+  }
+  
+  const int bMax = regionHist->GetMaximumBin();
+  const double peak = regionHist->GetBinCenter(bMax);
+  const auto [xmin, xmax] = computeWindow(peak);
+  
+  TF1 fG("fG_tmp", "gaus", xmin, xmax);
+  const int fitResult = regionHist->Fit(&fG, "QNR", "", xmin, xmax);
+  
+  if (fitResult != 0) {
+    outMu = std::numeric_limits<double>::quiet_NaN();
+    outSigma = 0.;
+    return false;
+  }
+  
+  outMu = fG.GetParameter(1);
+  outSigma = std::abs(fG.GetParameter(2));
+  
+  if (outMu < -100.0 || outMu > 4100.0 || outSigma <= 0.) {
+    outMu = std::numeric_limits<double>::quiet_NaN();
+    outSigma = 0.;
+    return false;
+  }
+  
+  return true;
+}
+
+void PostProcTask::updateTrendingScalars()
+{
+  auto updateHist = [](TH1F* h, double value) {
+    if (!h || std::isnan(value)) return;
+    h->Reset("ICES");
+    h->Fill(value);
+  };
+  
+  updateHist(mTrendAInner.get(), mMuAInner);
+  updateHist(mTrendAOuter.get(), mMuAOuter);
+  updateHist(mTrendC.get(), mMuC);
+  updateHist(mTrendAll.get(), mMuAll);
 }
 
 void PostProcTask::finalize(Trigger t, framework::ServiceRegistryRef)
