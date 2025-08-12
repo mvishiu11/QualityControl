@@ -22,6 +22,7 @@
 #include "Common/Utils.h"
 
 #include "FITCommon/HelperHist.h"
+#include "FITCommon/HelperGraph.h"
 #include "FITCommon/HelperCommon.h"
 
 #include <TH1F.h>
@@ -117,6 +118,14 @@ void PostProcTask::configure(const boost::property_tree::ptree& config)
   mUpTimeThreshold = helper::getConfigFromPropertyTree<int>(config, Form("%s.upTimeThreshold", configCustom), 192);
   mTimestampMetaField = helper::getConfigFromPropertyTree<std::string>(config, cfgPath("timestampMetaField"), "timestampTF");
 
+  mAmplitudeAnalysisEnabled = helper::getConfigFromPropertyTree<bool>(config, cfgPath("amplitudeAnalysisEnabled"), false);
+  mExpectedGain = helper::getConfigFromPropertyTree<double>(config, cfgPath("expectedGain"), 15.0);
+  mSliceFrac = helper::getConfigFromPropertyTree<double>(config, cfgPath("sliceFrac"), 0.25);
+  mUseEmpiricalFitting = helper::getConfigFromPropertyTree<bool>(config, cfgPath("useEmpiricalFitting"), true);
+  mUseFallbackFitting = helper::getConfigFromPropertyTree<bool>(config, cfgPath("useFallbackFitting"), true);
+  mTrendEnabled = helper::getConfigFromPropertyTree<bool>(config, cfgPath("trendEnabled"), false);
+  mTrendScalarsFolder = helper::getConfigFromPropertyTree<std::string>(config, cfgPath("trendScalarsFolder"), "TrendsScalars");
+
   // TO REMOVE
   // VERY BAD SOLUTION, YOU SHOULDN'T USE IT
   const std::string del = ",";
@@ -158,6 +167,26 @@ void PostProcTask::initialize(Trigger, framework::ServiceRegistryRef services)
   mHistBcFeeOutOfBunchCollForNChanTrg.reset();
   mHistBcFeeOutOfBunchCollForChargeTrg.reset();
   mHistBcFeeOutOfBunchCollForOrAInTrg.reset();
+
+  // Reset amplitude analysis objects
+  mGraphMIPVsChannel.reset();
+  mGraphHistMean.reset();
+  mGraphMeanRatio.reset();
+  mTrendingFittedMeans.reset();
+  mTrendingRawMeans.reset();
+  mTrendingMeanRatios.reset();
+
+  // Reset fit results
+  std::fill(mMean.begin(), mMean.end(), std::numeric_limits<double>::quiet_NaN());
+  std::fill(mSigma.begin(), mSigma.end(), 0.);
+  std::fill(mChanX.begin(), mChanX.end(), 0.);
+  std::fill(mChanXErr.begin(), mChanXErr.end(), 0.);
+  std::fill(mHistMean.begin(), mHistMean.end(), std::numeric_limits<double>::quiet_NaN());
+  std::fill(mMeanRatio.begin(), mMeanRatio.end(), std::numeric_limits<double>::quiet_NaN());
+
+  mEmpiricalFitsUsed = 0;
+  mFallbackFitsUsed = 0;
+  mFailedFits = 0;
 
   for (auto& [_, histo] : mMapTrgHistBC) {
     delete histo;
@@ -271,6 +300,11 @@ void PostProcTask::initialize(Trigger, framework::ServiceRegistryRef services)
     mHistBcFeeOutOfBunchCollForChargeTrg->GetYaxis()->SetBinLabel(entry.second + 1, entry.first.c_str());
     mHistBcFeeOutOfBunchCollForOrAInTrg->GetYaxis()->SetBinLabel(entry.second + 1, entry.first.c_str());
   }
+
+  if (mAmplitudeAnalysisEnabled) {
+    initializeAmplitudeAnalysis();
+  }
+
   getObjectsManager()->startPublishing(mHistTriggers.get(), quality_control::core::PublicationPolicy::ThroughStop);
   getObjectsManager()->startPublishing(mHistBcPattern.get(), quality_control::core::PublicationPolicy::ThroughStop);
   getObjectsManager()->setDefaultDrawOptions(mHistBcPattern.get(), "COLZ");
@@ -720,6 +754,11 @@ void PostProcTask::update(Trigger t, framework::ServiceRegistryRef)
     projValidatedSWandHW->LabelsDeflate();
     mHistTrgValidation->Divide(projOnlyHWorSW.get(), projValidatedSWandHW.get());
   }
+
+  if (mAmplitudeAnalysisEnabled && hAmpPerChannel) {
+    performAmplitudeAnalysis(hAmpPerChannel);
+  }
+
   decomposeHists(t);
   setTimestampToMOs(ts);
 }
@@ -760,11 +799,309 @@ void PostProcTask::decomposeHists(Trigger trg)
     }
   }
 }
+
 void PostProcTask::setTimestampToMOs(long long timestamp)
 {
   for (int iObj = 0; iObj < getObjectsManager()->getNumberPublishedObjects(); iObj++) {
     auto mo = getObjectsManager()->getMonitorObject(iObj);
     mo->addOrUpdateMetadata(mTimestampMetaField, std::to_string(timestamp));
+  }
+}
+
+void PostProcTask::initializeAmplitudeAnalysis()
+{
+  ILOG(Info, Support) << "Initializing amplitude analysis for FV0" << ENDM;
+  
+  initializeEmpiricalParameters();
+  createAmplitudeGraphs();
+  
+  if (mTrendEnabled) {
+    mTrendingFittedMeans = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+      mTrendScalarsFolder + "/FittedMeansPerChannel",
+      "FV0 Fitted Means per Channel;Channel ID;Fitted Mean (ADC/MIP)",
+      sNCHANNELS_PM, 0, sNCHANNELS_PM);
+    
+    mTrendingRawMeans = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+      mTrendScalarsFolder + "/RawMeansPerChannel",
+      "FV0 Raw Means per Channel;Channel ID;Raw Mean (ADC)",
+      sNCHANNELS_PM, 0, sNCHANNELS_PM);
+    
+    mTrendingMeanRatios = helper::registerHist<TH1F>(
+      getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "",
+      mTrendScalarsFolder + "/MeanRatiosPerChannel",
+      "FV0 Mean Ratios per Channel;Channel ID;Raw/Fitted Ratio",
+      sNCHANNELS_PM, 0, sNCHANNELS_PM);
+    
+    ILOG(Info, Support) << "Created trending histograms" << ENDM;
+  }
+}
+
+void PostProcTask::initializeEmpiricalParameters()
+{
+  ILOG(Info, Support) << "Initializing empirical fitting parameters" << ENDM;
+  
+  mDefaultFitParams = ChannelFitParams(0.28, 0.20, false, 1, "default_all_rings");
+  
+  // Create channel mapping for detector position identification
+  for (unsigned int ch = 0; ch < sNCHANNELS_PM && ch < 48; ++ch) {
+    FV0Ring ring = static_cast<FV0Ring>(ch / 8);
+    FV0Sector sector = static_cast<FV0Sector>(ch % 8);
+    mChannelMapping[ch] = DetectorPosition(ring, sector);
+  }
+  
+  // Ring R2 specific parameters
+  mChannelFitParams[13] = ChannelFitParams(0.24, 0.28, false, 1, "F_R2");
+  
+  // Ring R4 specific parameters
+  mChannelFitParams[29] = ChannelFitParams(0.24, 0.24, false, 1, "F_R4");
+  mChannelFitParams[31] = ChannelFitParams(0.28, 0.25, false, 1, "H_R4");
+  
+  // Outer ring channels (32-47) default
+  for (unsigned int ch = 32; ch < 48; ++ch) {
+    mChannelFitParams[ch] = ChannelFitParams(0.36, 0.36, false, 1, "Ring5x_default");
+  }
+  
+  // Ring R51 specific overrides
+  mChannelFitParams[33] = ChannelFitParams(0.35, 0.45, false, 1, "B_R51");
+  mChannelFitParams[34] = ChannelFitParams(0.26, 0.35, false, 1, "C_R51");
+  mChannelFitParams[35] = ChannelFitParams(0.40, 0.45, false, 1, "D_R51");
+  mChannelFitParams[36] = ChannelFitParams(0.36, 0.36, false, 1, "E_R51");
+  mChannelFitParams[39] = ChannelFitParams(0.30, 0.40, false, 1, "H_R51");
+  
+  // Ring R52 specific overrides
+  mChannelFitParams[40] = ChannelFitParams(0.30, 0.30, false, 1, "A_R52");
+  mChannelFitParams[42] = ChannelFitParams(0.36, 0.36, false, 1, "C_R52");
+  mChannelFitParams[43] = ChannelFitParams(0.36, 0.36, false, 1, "D_R52");
+  mChannelFitParams[44] = ChannelFitParams(0.30, 0.30, false, 1, "E_R52");
+  mChannelFitParams[45] = ChannelFitParams(0.36, 0.36, false, 1, "F_R52");
+  mChannelFitParams[46] = ChannelFitParams(0.40, 0.40, false, 1, "G_R52");
+  mChannelFitParams[47] = ChannelFitParams(0.34, 0.38, false, 1, "H_R52");
+  
+  ILOG(Info, Support) << "Configured empirical parameters for " << mChannelFitParams.size() << " channels" << ENDM;
+}
+
+void PostProcTask::createAmplitudeGraphs()
+{
+  mGraphMIPVsChannel = helper::registerGraph<TGraphErrors>(
+    getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
+    "MIPVsChannel", "FV0: MIP vs Channel;Channel ID;MIP ADC(ch)", sNCHANNELS_PM);
+  
+  mGraphHistMean = helper::registerGraph<TGraphErrors>(
+    getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
+    "HistMeanVsChannel", "FV0: raw distribution mean vs channel;Channel ID;Mean ADC (ADC ch)", sNCHANNELS_PM);
+  
+  mGraphMeanRatio = helper::registerGraph<TGraphErrors>(
+    getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
+    "HistMeanOverFitMean", "FV0: ⟨ADC⟩ / μ_{fit} vs channel;Channel ID;Ratio", sNCHANNELS_PM);
+  
+  // Apply styling
+  if (mGraphMIPVsChannel) {
+    mGraphMIPVsChannel->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
+    mGraphMIPVsChannel->GetYaxis()->SetRangeUser(mExpectedGain - 2, mExpectedGain + 2);
+    mGraphMIPVsChannel->SetMarkerSize(1.2);
+    mGraphMIPVsChannel->SetMarkerStyle(8);
+    mGraphMIPVsChannel->SetMarkerColor(kBlack);
+    mGraphMIPVsChannel->SetLineWidth(2);
+    
+    // Add reference line
+    auto* refLine = new TLine(-0.5, mExpectedGain, sNCHANNELS_PM + 0.5, mExpectedGain);
+    refLine->SetLineColor(kBlue + 2);
+    refLine->SetLineStyle(2);
+    refLine->SetLineWidth(2);
+    mGraphMIPVsChannel->GetListOfFunctions()->Add(refLine);
+  }
+  
+  if (mGraphHistMean) {
+    mGraphHistMean->SetMarkerStyle(8);
+    mGraphHistMean->SetMarkerColor(kBlack);
+    mGraphHistMean->SetLineColor(kBlack);
+    mGraphHistMean->SetMarkerSize(1.2);
+    mGraphHistMean->SetLineWidth(2);
+    mGraphHistMean->GetYaxis()->SetRangeUser(0, 350);
+    mGraphHistMean->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
+  }
+  
+  if (mGraphMeanRatio) {
+    mGraphMeanRatio->SetMarkerStyle(8);
+    mGraphMeanRatio->SetMarkerColor(kBlack);
+    mGraphMeanRatio->SetLineColor(kBlack);
+    mGraphMeanRatio->SetMarkerSize(1.2);
+    mGraphMeanRatio->SetLineWidth(2);
+    mGraphMeanRatio->GetYaxis()->SetRangeUser(0, 30);
+    mGraphMeanRatio->GetXaxis()->SetLimits(-0.5, sNCHANNELS_PM + 0.5);
+  }
+}
+
+DetectorPosition PostProcTask::getChannelPosition(unsigned int channel) const
+{
+  auto it = mChannelMapping.find(channel);
+  if (it != mChannelMapping.end()) {
+    return it->second;
+  }
+  
+  FV0Ring ring = static_cast<FV0Ring>(std::min(channel / 8, 5U));
+  FV0Sector sector = static_cast<FV0Sector>(channel % 8);
+  return DetectorPosition(ring, sector);
+}
+
+ChannelFitParams PostProcTask::getChannelFitParams(unsigned int channel) const
+{
+  auto it = mChannelFitParams.find(channel);
+  if (it != mChannelFitParams.end()) {
+    return it->second;
+  }
+  return mDefaultFitParams;
+}
+
+std::pair<double, double> PostProcTask::calculateFitWindow(unsigned int channel, double peak, int peakBin, TH1D* histogram) const
+{
+  if (!mUseEmpiricalFitting) {
+    double xmin = std::max<double>(peak - mSliceFrac * std::abs(peak), -100.0);
+    double xmax = std::min<double>(peak + mSliceFrac * std::abs(peak), 4100.0);
+    mFallbackFitsUsed++;
+    return std::make_pair(xmin, xmax);
+  }
+  
+  ChannelFitParams params = getChannelFitParams(channel);
+  DetectorPosition pos = getChannelPosition(channel);
+  
+  double xmin = std::max<double>(peak - params.leftSliceFrac * std::abs(peak), -100.0);
+  double xmax = std::min<double>(peak + params.rightSliceFrac * std::abs(peak), 4100.0);
+  
+  if (xmax <= xmin) {
+    if (mUseFallbackFitting) {
+      double fallback_xmin = std::max<double>(peak - mSliceFrac * std::abs(peak), -100.0);
+      double fallback_xmax = std::min<double>(peak + mSliceFrac * std::abs(peak), 4100.0);
+      mFallbackFitsUsed++;
+      return std::make_pair(fallback_xmin, fallback_xmax);
+    } else {
+      mFailedFits++;
+    }
+  }
+  
+  mEmpiricalFitsUsed++;
+  return std::make_pair(xmin, xmax);
+}
+
+void PostProcTask::performAmplitudeAnalysis(TH2F* hAmpPerChannel)
+{
+  mEmpiricalFitsUsed = 0;
+  mFallbackFitsUsed = 0;
+  mFailedFits = 0;
+  
+  for (int chBin = 1, nBins = hAmpPerChannel->GetXaxis()->GetNbins(); chBin <= nBins; ++chBin) {
+    unsigned int ch = chBin - 1;
+    if (ch >= sNCHANNELS_PM) continue;
+    
+    std::unique_ptr<TH1D> proj(hAmpPerChannel->ProjectionY(Form("p_ch%02u", ch), chBin, chBin));
+    proj->Sumw2(kFALSE);
+    
+    ChannelFitParams params = getChannelFitParams(ch);
+    if (params.useRebin && params.rebinFactor > 1) {
+      proj->Rebin(params.rebinFactor);
+    }
+    
+    double rawMean = proj->GetMean();
+    mHistMean[ch] = rawMean;
+    
+    if (proj->GetEntries() > 50) {
+      static TF1 fG("fG", "gaus", -100, 4100);
+      
+      int bMax = proj->GetMaximumBin();
+      double peak = proj->GetBinCenter(bMax);
+      
+      auto [xmin, xmax] = calculateFitWindow(ch, peak, bMax, proj.get());
+      
+      const int fitResult = proj->Fit(&fG, "QNR", "", xmin, xmax);
+      
+      if (fitResult == 0) {
+        mMean[ch] = fG.GetParameter(1);
+        mSigma[ch] = std::abs(fG.GetParameter(2));
+        
+        if (mMean[ch] >= -100.0 && mMean[ch] <= 4100.0 && mSigma[ch] > 0.) {
+          if (!std::isnan(mMean[ch]) && mMean[ch] != 0.) {
+            mMeanRatio[ch] = rawMean / mMean[ch];
+          } else {
+            mMeanRatio[ch] = std::numeric_limits<double>::quiet_NaN();
+          }
+        } else {
+          mMean[ch] = std::numeric_limits<double>::quiet_NaN();
+          mSigma[ch] = 0.;
+          mMeanRatio[ch] = std::numeric_limits<double>::quiet_NaN();
+          mFailedFits++;
+        }
+      } else {
+        mMean[ch] = std::numeric_limits<double>::quiet_NaN();
+        mSigma[ch] = 0.;
+        mMeanRatio[ch] = std::numeric_limits<double>::quiet_NaN();
+        mFailedFits++;
+      }
+    } else {
+      mMean[ch] = std::numeric_limits<double>::quiet_NaN();
+      mSigma[ch] = 0.;
+      mMeanRatio[ch] = std::numeric_limits<double>::quiet_NaN();
+    }
+    
+    mChanX[ch] = ch;
+    mChanXErr[ch] = 0.0;
+  }
+  
+  updateAmplitudeGraphs();
+  updateTrendingHistograms();
+  logFittingStatistics();
+}
+
+void PostProcTask::updateAmplitudeGraphs()
+{
+  for (std::size_t ch = 0; ch < sNCHANNELS_PM; ++ch) {
+    if (mGraphMIPVsChannel) {
+      mGraphMIPVsChannel->SetPoint(ch, mChanX[ch], mMean[ch]);
+      mGraphMIPVsChannel->SetPointError(ch, mChanXErr[ch], 0.);
+    }
+    if (mGraphHistMean) {
+      mGraphHistMean->SetPoint(ch, mChanX[ch], mHistMean[ch]);
+      mGraphHistMean->SetPointError(ch, mChanXErr[ch], 0.);
+    }
+    if (mGraphMeanRatio) {
+      mGraphMeanRatio->SetPoint(ch, mChanX[ch], mMeanRatio[ch]);
+      mGraphMeanRatio->SetPointError(ch, mChanXErr[ch], 0.);
+    }
+  }
+}
+
+void PostProcTask::updateTrendingHistograms()
+{
+  if (!mTrendEnabled) return;
+  
+  mTrendingFittedMeans->Reset();
+  mTrendingRawMeans->Reset();
+  mTrendingMeanRatios->Reset();
+  
+  for (unsigned int ch = 0; ch < sNCHANNELS_PM; ++ch) {
+    if (!std::isnan(mMean[ch]) && mMean[ch] > 0.) {
+      mTrendingFittedMeans->SetBinContent(ch + 1, mMean[ch]);
+    }
+    if (!std::isnan(mHistMean[ch])) {
+      mTrendingRawMeans->SetBinContent(ch + 1, mHistMean[ch]);
+    }
+    if (!std::isnan(mMeanRatio[ch])) {
+      mTrendingMeanRatios->SetBinContent(ch + 1, mMeanRatio[ch]);
+    }
+  }
+}
+
+void PostProcTask::logFittingStatistics() const
+{
+  int totalFits = mEmpiricalFitsUsed + mFallbackFitsUsed + mFailedFits;
+  if (totalFits > 0) {
+    ILOG(Info, Support) << "Fitting statistics: " << mEmpiricalFitsUsed << " empirical fits ("
+                        << (100.0 * mEmpiricalFitsUsed / totalFits) << "%), "
+                        << mFallbackFitsUsed << " fallback fits ("
+                        << (100.0 * mFallbackFitsUsed / totalFits) << "%), "
+                        << mFailedFits << " failed fits ("
+                        << (100.0 * mFailedFits / totalFits) << "%)" << ENDM;
   }
 }
 

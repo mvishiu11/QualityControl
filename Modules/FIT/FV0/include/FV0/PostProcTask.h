@@ -28,6 +28,9 @@
 
 #include "FITCommon/DetectorFIT.h"
 
+#include <TF1.h>
+#include <TGraphErrors.h>
+#include <TLine.h>
 #include <TH2.h>
 #include <TCanvas.h>
 #include <TGraph.h>
@@ -41,6 +44,39 @@ class TProfile;
 
 namespace o2::quality_control_modules::fv0
 {
+  /// Detector geometry mapping for FV0
+  /// These enums help translate between linear channel numbers and physical detector positions
+  enum class FV0Ring { R1 = 0, R2 = 1, R3 = 2, R4 = 3, R51 = 4, R52 = 5 };
+  enum class FV0Sector { A = 0, B = 1, C = 2, D = 3, E = 4, F = 5, G = 6, H = 7 };
+  
+  /// Helper structure to represent detector position
+  struct DetectorPosition {
+    FV0Ring ring;
+    FV0Sector sector;
+    
+    DetectorPosition() : ring(FV0Ring::R1), sector(FV0Sector::A) {}
+    DetectorPosition(FV0Ring r, FV0Sector s) : ring(r), sector(s) {}
+    
+    std::string toString() const {
+      const char* ringNames[] = { "R1", "R2", "R3", "R4", "R51", "R52" };
+      const char* sectorNames[] = { "A", "B", "C", "D", "E", "F", "G", "H" };
+      return std::string(sectorNames[static_cast<int>(sector)]) + "_" + 
+             std::string(ringNames[static_cast<int>(ring)]);
+    }
+  };
+  
+  /// Empirical fitting parameters
+  struct ChannelFitParams {
+    double leftSliceFrac;
+    double rightSliceFrac;
+    bool useRebin;
+    int rebinFactor;
+    std::string label;
+    
+    ChannelFitParams() : leftSliceFrac(0.28), rightSliceFrac(0.20), useRebin(false), rebinFactor(1), label("default") {}
+    ChannelFitParams(double leftFrac, double rightFrac, bool rebin = false, int rebinFac = 1, const std::string& lbl = "custom")
+      : leftSliceFrac(leftFrac), rightSliceFrac(rightFrac), useRebin(rebin), rebinFactor(rebinFac), label(lbl) {}
+  };
 
 /// \brief Basic Postprocessing Task for FV0, computes among others the trigger rates
 /// \author Sebastian Bysiak sbysiak@cern.ch
@@ -101,6 +137,55 @@ class PostProcTask final : public quality_control::postprocessing::PostProcessin
   std::unique_ptr<TH2F> mHistBcFeeOutOfBunchCollForNChanTrg;
   std::unique_ptr<TH2F> mHistBcFeeOutOfBunchCollForChargeTrg;
   std::unique_ptr<TH2F> mHistBcFeeOutOfBunchCollForOrAInTrg;
+
+  // Amplitude analysis configuration
+  bool mAmplitudeAnalysisEnabled{ false };
+  double mExpectedGain{ 15.0 };
+  double mSliceFrac{ 0.25 };
+  bool mUseEmpiricalFitting{ true };
+  bool mUseFallbackFitting{ true };
+  bool mTrendEnabled{ false };
+  std::string mTrendScalarsFolder{ "TrendsScalars" };
+
+  // Amplitude analysis managed objects
+  std::unique_ptr<TGraphErrors> mGraphMIPVsChannel;
+  std::unique_ptr<TGraphErrors> mGraphHistMean;
+  std::unique_ptr<TGraphErrors> mGraphMeanRatio;
+
+  // Trending histograms
+  std::unique_ptr<TH1F> mTrendingFittedMeans;
+  std::unique_ptr<TH1F> mTrendingRawMeans;
+  std::unique_ptr<TH1F> mTrendingMeanRatios;
+
+  // Fit results storage
+  std::array<double, sNCHANNELS_PM> mMean{};
+  std::array<double, sNCHANNELS_PM> mSigma{};
+  std::array<double, sNCHANNELS_PM> mChanX{};
+  std::array<double, sNCHANNELS_PM> mChanXErr{};
+  std::array<double, sNCHANNELS_PM> mHistMean{};
+  std::array<double, sNCHANNELS_PM> mMeanRatio{};
+
+  // Empirical fitting infrastructure
+  std::map<unsigned int, ChannelFitParams> mChannelFitParams;
+  ChannelFitParams mDefaultFitParams;
+  std::map<unsigned int, DetectorPosition> mChannelMapping;
+
+  // Statistics tracking
+  mutable int mEmpiricalFitsUsed{ 0 };
+  mutable int mFallbackFitsUsed{ 0 };
+  mutable int mFailedFits{ 0 };
+
+  // Amplitude analysis methods
+  void initializeAmplitudeAnalysis();
+  void initializeEmpiricalParameters();
+  void createAmplitudeGraphs();
+  void updateAmplitudeGraphs();
+  void performAmplitudeAnalysis(TH2F* hAmpPerChannel);
+  void updateTrendingHistograms();
+  DetectorPosition getChannelPosition(unsigned int channel) const;
+  ChannelFitParams getChannelFitParams(unsigned int channel) const;
+  std::pair<double, double> calculateFitWindow(unsigned int channel, double peak, int peakBin, TH1D* histogram) const;
+  void logFittingStatistics() const;
 
   uint8_t mTCMhash;
   std::array<uint8_t, sNCHANNELS_PM> mChID2PMhash; // map chID->hashed PM value

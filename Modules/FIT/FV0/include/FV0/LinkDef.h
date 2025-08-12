@@ -10,9 +10,6 @@
 #pragma link C++ class o2::quality_control_modules::fv0::GenericCheck + ;
 #pragma link C++ class o2::quality_control_modules::fv0::TriggersSwVsTcmCheck + ;
 #pragma link C++ class o2::quality_control_modules::fv0::OutOfBunchCollFeeModulesCheck + ;
-#pragma link C++ class o2::quality_control_modules::fv0::AmplitudePostProcTask + ;
-#pragma link C++ class o2::quality_control_modules::fv0::AmplitudeDistributionCheck + ;
-#pragma link C++ class o2::quality_control_modules::fv0::GaussianReferenceCheck + ;
 #pragma link C++ class o2::quality_control_modules::fv0::AutoTrendingTaskConfig + ;
 #pragma link C++ class o2::quality_control_modules::fv0::AutoTrendingTask + ;
 #pragma link C++ class o2::quality_control_modules::fv0::FV0MIPCheck + ;
