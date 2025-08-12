@@ -10,7 +10,10 @@ target_sources(O2QcFV0 PRIVATE src/TH1ReductorLaser.cxx
                                src/PostProcTask.cxx
                                src/OutOfBunchCollCheck.cxx
                                src/TriggersSwVsTcmCheck.cxx
-                               src/OutOfBunchCollFeeModulesCheck.cxx)
+                               src/OutOfBunchCollFeeModulesCheck.cxx
+                               src/FV0MIPCheck.cxx
+                               src/AutoTrendingTask.cxx
+                               src/AutoTrendingTaskConfig.cxx)
 
 target_include_directories(
   O2QcFV0
@@ -40,6 +43,9 @@ add_root_dictionary(O2QcFV0
           include/FV0/GenericCheck.h
           include/FV0/TriggersSwVsTcmCheck.h
           include/FV0/OutOfBunchCollFeeModulesCheck.h
+          include/FV0/FV0MIPCheck.h
+          include/FV0/AutoTrendingTask.h
+          include/FV0/AutoTrendingTaskConfig.h
   LINKDEF include/FV0/LinkDef.h)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/FV0
