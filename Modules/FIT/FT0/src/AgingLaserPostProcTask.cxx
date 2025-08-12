@@ -1,11 +1,16 @@
 // Copyright 2019-2025 CERN and copyright holders of ALICE O2.
-// See copyright notice in the corresponding header.
-// SPDX-License-Identifier: GPL-3.0
+// See https://alice-o2.web.cern.ch/copyright for details.
+// All rights not expressly granted are reserved.
 //
-///
-/// \file   AgingLaserPostProcTask.cxx
+// This software is distributed under the terms of the GNU General
+// Public License v3 (GPL Version 3), copied verbatim in the file "COPYING".
+//
+// In applying this license CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+/// \file   AgingLaserPostProcTask.h
 /// \author Andreas Molander <andreas.molander@cern.ch>, Jakub Muszyński <jakub.milosz.muszynski@cern.ch>
-///
 
 #include "FT0/AgingLaserPostProcTask.h"
 
@@ -27,15 +32,11 @@ using namespace o2::quality_control::postprocessing;
 namespace o2::quality_control_modules::ft0
 {
 
-//====================================================================
 AgingLaserPostProcTask::~AgingLaserPostProcTask() = default;
 
-//--------------------------------------------------------------------
 void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
 {
   ILOG(Info) << "initialize AgingLaserPostProcTask" << ENDM;
-
-  /* ---- read configuration ---- */
 
   const std::string detChs = o2::quality_control_modules::common::getFromConfig<std::string>(
     mCustomParameters, "detectorChannelIDs", "");
@@ -69,8 +70,6 @@ void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
   ILOG(Info) << "ADC search window  : [" << mADCSearchMin << ", " << mADCSearchMax << "]" << ENDM;
   ILOG(Info) << "fractional window  : a=" << mFracWindowA << "  b=" << mFracWindowB << ENDM;
 
-  /* ---- book output histogram ---- */
-
   mAmpVsChNormWeightedMeanA = fit::helper::registerHist<TH1F>(
     getObjectsManager(),
     quality_control::core::PublicationPolicy::ThroughStop,
@@ -84,7 +83,6 @@ void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
     112, 96, 208);
 }
 
-//--------------------------------------------------------------------
 void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv)
 {
   mAmpVsChNormWeightedMeanA->Reset();
@@ -141,7 +139,7 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
     auto h1 = std::unique_ptr<TH1>(h2amp->ProjectionY(
       Form("proj_%d", chId), chId + 1, chId + 1));
 
-    // global maximum (whole histogram)
+    // global maximum
     const int binMax = h1->GetMaximumBin();
     const double xMax = h1->GetBinCenter(binMax);
     const double winLo = TMath::Max(0., (1. - mFracWindowA) * xMax);
@@ -169,15 +167,12 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
   for (uint8_t ch = 0; ch < sNCHANNELS_PM; ++ch)
     processChannel(ch);
 
-  /* ---- log some stats ---- */
   ILOG(Info) << "update done – " << nRef << " reference fits, norm=" << norm << ENDM;
 }
 
-//--------------------------------------------------------------------
 void AgingLaserPostProcTask::finalize(Trigger, framework::ServiceRegistryRef)
 {
   ILOG(Info) << "finalize AgingLaserPostProcTask" << ENDM;
 }
 
-//====================================================================
 } // namespace o2::quality_control_modules::ft0

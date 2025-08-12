@@ -15,7 +15,7 @@
     },
 
     "tasks": {
-      "DigitsAmplitude": {
+      "Digits": {
         "active": "true",
         "className": "o2::quality_control_modules::ft0::DigitQcTask",
         "moduleName": "QcFT0",
@@ -42,30 +42,29 @@
     },
 
     "postprocessing": {
-      "AmplitudeAnalysisV2": {
+      "PostProc": {
         "active": "true",
-        "className": "o2::quality_control_modules::ft0::AmplitudePostProcTask",
+        "className": "o2::quality_control_modules::ft0::PostProcTask",
         "moduleName": "QcFT0",
         "detectorName": "FT0",
         "custom": {
-          "pathDigitQcTask": "FT0/MO/DigitsAmplitude",
-          "ampMin": "-100",
-          "ampMax": "4100",
-          "ampBins": "4200",
-          "leftSliceFrac": "0.15",
-          "rightSliceFrac": "0.15",
-          "minBinEntriesForWeight": "1",
-          "expectedGain": "1",
-          "trendEnabled": "true",
-          "trendScalarsFolder": "TrendsScalars",
+          "numOrbitsInTF": "32",
           "cycleDurationMoName": "CycleDurationNTF",
-          "timestampSourceLhcIf": "now"
+          "timestampSourceLhcIf": "metadata",
+          "pathDigitQcTask": "FT0/MO/Digits",
+          "trendEnabled": "true",
+          "leftSliceFrac": "0.15",
+          "rightSliceFrac": "0.15"
         },
-        "initTrigger": [ "userorcontrol" ],
-        "updateTrigger": [
-          "newobject:qcdb:FT0/MO/DigitsAmplitude/AmpPerChannel"
+        "initTrigger": [
+          "userorcontrol"
         ],
-        "stopTrigger": [ "userorcontrol" ]
+        "updateTrigger": [
+          "newobject:qcdb:FT0/MO/Digits/AmpPerChannel"
+        ],
+        "stopTrigger": [
+          "userorcontrol"
+        ]
       },
       "AmplitudeTrendingRegions": {
         "active": "true",
@@ -80,7 +79,7 @@
         "dataSources": [
           {
             "type": "repository",
-            "path": "FT0/MO/AmplitudeAnalysisV2/TrendsScalars",
+            "path": "FT0/MO/PostProc/TrendsScalars",
             "names": ["AInner", "AOuter", "C", "All"],
             "reductorName": "o2::quality_control_modules::common::TH1Reductor",
             "moduleName": "QcCommon"
@@ -129,7 +128,7 @@
           ],
 
         "initTrigger":   ["userorcontrol"],
-        "updateTrigger": ["newobject:qcdb:FT0/MO/AmplitudeAnalysisV2/TrendsScalars/All"],
+        "updateTrigger": ["newobject:qcdb:FT0/MO/PostProc/TrendsScalars/All"],
         "stopTrigger":   ["userorcontrol"]
       }
     }

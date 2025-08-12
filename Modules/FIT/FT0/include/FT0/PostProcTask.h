@@ -34,8 +34,6 @@
 #include <TProfile.h>
 #include <TCanvas.h>
 #include <TGraph.h>
-#include <TGraphErrors.h>
-#include <TF1.h>
 
 #include <memory>
 #include <string>
@@ -105,46 +103,34 @@ class PostProcTask final : public quality_control::postprocessing::PostProcessin
   /// from the DigitQcTask, where each projection is scaled with 1/(counts in that projection)
   std::unique_ptr<TH1F> mHistAmpNormPerChannel;
 
-  // NEW: MIP tracking histograms
-  std::unique_ptr<TH1F> mHistMIPValues;     ///< MIP values per channel
-  std::unique_ptr<TH1F> mHistMIPDeviations; ///< MIP deviations from expected
-  std::unique_ptr<TH2F> mHistMIPTrends;     ///< MIP trends over time
+  // Trending scalar configuration
+  bool mTrendEnabled{ false };
+  double mLeftSliceFrac{ 0.15 };
+  double mRightSliceFrac{ 0.15 };
 
-  // NEW: Summary graphs for amplitude analysis
-  std::unique_ptr<TGraphErrors> mGraphMPVvsChannel; ///< Mean vs Channel from Gaussian fits
-  std::unique_ptr<TGraphErrors> mGraphMIPvsChannel; ///< MIP vs Channel summary
+  // Trending scalar histograms
+  std::unique_ptr<TH1F> mTrendAInner;
+  std::unique_ptr<TH1F> mTrendAOuter; 
+  std::unique_ptr<TH1F> mTrendC;
+  std::unique_ptr<TH1F> mTrendAll;
+
+  // Fit results storage
+  double mMuAInner{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuAOuter{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuC{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuAll{ std::numeric_limits<double>::quiet_NaN() };
+
+  // Trending methods
+  std::pair<double, double> computeWindow(double peak) const;
+  bool fitRegionGaussian(TH1F* regionHist, double& outMu, double& outSigma) const;
+  void updateTrendingScalars();
 
   ChannelGeometry mChannelGeometry; //!
   // Configurations
   int mLowTimeThreshold{ -192 };
   int mUpTimeThreshold{ 192 };
   std::string mAsynchChannelLogic{ "standard" };
-
-  // NEW: Amplitude analysis configuration
-  bool mEnableAmplitudeAnalysis{ false }; ///< Enable enhanced amplitude analysis
-  bool mEnableMIPTracking{ false };       ///< Enable MIP tracking
-  double mSliceFracLeft{ 0.25 };          ///< Left side fit window fraction
-  double mSliceFracRight{ 0.25 };         ///< Right side fit window fraction
-  double mMIPExpectedValue{ 100.0 };      ///< Expected MIP value in ADC channels
-  double mMIPTolerancePercent{ 20.0 };    ///< Tolerance for MIP deviation (%)
-  int mMinEntriesForFit{ 50 };            ///< Minimum entries required for Gaussian fit
-
-  // NEW: Gaussian fit results storage
-  std::array<double, sNCHANNELS_PM> mMean{};     ///< Fitted mean values
-  std::array<double, sNCHANNELS_PM> mSigma{};    ///< Fitted sigma values
-  std::array<double, sNCHANNELS_PM> mChanX{};    ///< Channel X coordinates for graphs
-  std::array<double, sNCHANNELS_PM> mChanXErr{}; ///< Channel X error bars
-
-  // NEW: MIP tracking arrays
-  std::array<double, sNCHANNELS_PM> mMIPValues{};     ///< Current MIP values per channel
-  std::array<double, sNCHANNELS_PM> mMIPDeviations{}; ///< MIP deviations from expected
-
-  // NEW: Statistics tracking
-  mutable int mSuccessfulFits{ 0 };        ///< Counter for successful fits
-  mutable int mFailedFits{ 0 };            ///< Counter for failed fits
-  mutable int mMIPChannelsInRange{ 0 };    ///< Counter for channels with MIP in expected range
-  mutable int mMIPChannelsOutOfRange{ 0 }; ///< Counter for channels with MIP out of range
-
+  //
   void setTimestampToMOs();
   // TO REMOVE
   std::vector<unsigned int> mVecChannelIDs{};
@@ -154,13 +140,6 @@ class PostProcTask final : public quality_control::postprocessing::PostProcessin
   MapHistsDecomposed_t mMapHistsToDecompose{};
   void decomposeHists();
   void reset();
-
-  // NEW: Amplitude analysis methods
-  void performAmplitudeAnalysis(TH2F* hAmpPerChannel);
-  void performMIPAnalysis();
-  void updateMIPTrends();
-  void logAmplitudeStatistics() const;
-  std::pair<double, double> calculateFitWindow(double peak, double sliceFracLeft, double sliceFracRight) const;
 };
 
 } // namespace o2::quality_control_modules::ft0

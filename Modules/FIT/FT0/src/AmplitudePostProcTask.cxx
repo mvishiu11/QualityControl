@@ -1,5 +1,18 @@
-// Copyright ...
-// \file   AmplitudePostProcTask.cxx
+// Copyright 2019-2025 CERN and copyright holders of ALICE O2.
+// See https://alice-o2.web.cern.ch/copyright for details.
+// All rights not expressly granted are reserved.
+//
+// This software is distributed under the terms of the GNU General
+// Public License v3 (GPL Version 3), copied verbatim in the file "COPYING".
+//
+// In applying this license CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+///
+/// \file   AmplitudePostProcTask.h
+/// \author Jakub Muszyński <jakub.milosz.muszynski@cern.ch>
+///
 
 // O2 QC / framework
 #include "FT0/AmplitudePostProcTask.h"
@@ -59,7 +72,6 @@ void AmplitudePostProcTask::configure(const boost::property_tree::ptree& cfg)
 
   // trend persistence knobs
   mTrendEnabled = helper::getConfigFromPropertyTree<bool>(cfg, key("trendEnabled"), true);
-  mTrendMaxPoints = helper::getConfigFromPropertyTree<int>(cfg, key("trendMaxPoints"), 10);
   mTrendScalarsFolder = helper::getConfigFromPropertyTree<std::string>(cfg, key("trendScalarsFolder"), "TrendsScalars");
 
   ILOG(Info, Support) << "AmplitudePostProcTask configured: "
