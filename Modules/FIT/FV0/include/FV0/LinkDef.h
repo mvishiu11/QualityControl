@@ -10,6 +10,9 @@
 #pragma link C++ class o2::quality_control_modules::fv0::GenericCheck + ;
 #pragma link C++ class o2::quality_control_modules::fv0::TriggersSwVsTcmCheck + ;
 #pragma link C++ class o2::quality_control_modules::fv0::OutOfBunchCollFeeModulesCheck + ;
+#pragma link C++ class o2::quality_control_modules::fv0::FV0MIPCheck + ;
+#pragma link C++ class o2::quality_control_modules::fv0::AutoTrendingTask + ;
+#pragma link C++ class o2::quality_control_modules::fv0::AutoTrendingTaskConfig + ;
 //#pragma link C++ class o2::quality_control_modules::fv0::CalibrationTask + ;
 //#pragma link C++ class o2::quality_control_modules::fv0::ChannelTimeCalibrationCheck + ;
 
