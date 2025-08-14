@@ -890,11 +890,11 @@ void PostProcTask::createAmplitudeGraphs()
 
   mGraphHistMean = helper::registerGraph<TGraphErrors>(
     getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
-    "HistMeanVsChannel", "FV0: raw distribution mean vs channel;Channel ID;Mean ADC (ADC ch)", sNCHANNELS_PM);
+    "HistMeanVsChannel", "FV0: Histogram Mean vs Channel;Channel ID;Mean ADC(ch)", sNCHANNELS_PM);
 
   mGraphMeanRatio = helper::registerGraph<TGraphErrors>(
     getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop, "AP",
-    "HistMeanOverFitMean", "FV0: ⟨ADC⟩ / μ_{fit} vs channel;Channel ID;Ratio", sNCHANNELS_PM);
+    "HistMeanOverFitMean", "FV0: Mean/MIP vs Channel;Channel ID;Mean/MIP", sNCHANNELS_PM);
 
   // Apply styling
   if (mGraphMIPVsChannel) {
