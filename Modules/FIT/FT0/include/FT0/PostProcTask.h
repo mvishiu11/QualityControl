@@ -103,6 +103,28 @@ class PostProcTask final : public quality_control::postprocessing::PostProcessin
   /// from the DigitQcTask, where each projection is scaled with 1/(counts in that projection)
   std::unique_ptr<TH1F> mHistAmpNormPerChannel;
 
+  // Trending scalar configuration
+  bool mTrendEnabled{ false };
+  double mLeftSliceFrac{ 0.15 };
+  double mRightSliceFrac{ 0.15 };
+
+  // Trending scalar histograms
+  std::unique_ptr<TH1F> mTrendAInner;
+  std::unique_ptr<TH1F> mTrendAOuter;
+  std::unique_ptr<TH1F> mTrendC;
+  std::unique_ptr<TH1F> mTrendAll;
+
+  // Fit results storage
+  double mMuAInner{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuAOuter{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuC{ std::numeric_limits<double>::quiet_NaN() };
+  double mMuAll{ std::numeric_limits<double>::quiet_NaN() };
+
+  // Trending methods
+  std::pair<double, double> computeWindow(double peak) const;
+  bool fitRegionGaussian(TH1F* regionHist, double& outMu, double& outSigma) const;
+  void updateTrendingScalars();
+
   ChannelGeometry mChannelGeometry; //!
   // Configurations
   int mLowTimeThreshold{ -192 };
