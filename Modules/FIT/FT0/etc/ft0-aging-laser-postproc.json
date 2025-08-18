@@ -11,7 +11,7 @@
     },
 
     "tasks": {
-      "AgingLaser": {
+      "AgingLaserKuba": {
         "active": "true",
         "className": "o2::quality_control_modules::ft0::AgingLaserTask",
         "moduleName": "QcFT0",
@@ -33,26 +33,25 @@
     },
 
     "postprocessing": {
-      "AgingLaserPostProc": {
+      "AgingLaserPostProcKuba": {
         "active": "true",
         "className": "o2::quality_control_modules::ft0::AgingLaserPostProcTask",
         "moduleName": "QcFT0",
         "detectorName": "FT0",
-        "extendedTaskParameters": {
-          "default": {
-            "adcSearchMin":        "150",
-            "adcSearchMax":        "600",
-            "fracWindowA":         "0.25",
-            "fracWindowB":         "0.25",
-            "detectorChannelIDs":  "0-207",
-            "referenceChannelIDs": "208,210,211"
-          }
+        "custom": {
+            "agingTaskSourcePath": "FT0/MO/AgingLaserKuba",
+            "refPeakWindowMin":        "150",
+            "refPeakWindowMax":        "600",
+            "fracWindowLow":         "0.30",
+            "fracWindowHigh":         "0.30",
+            "ignoreDetectorChannels":  "",
+            "ignoreRefChannels": "209"
         },
         "initTrigger":   [ "userorcontrol" ],
-        "updateTrigger": [ "newobject:qcdb:FT0/MO/AgingLaser/AmpPerChannel" ],
+        "updateTrigger": [ "newobject:qcdb:FT0/MO/AgingLaserKuba/AmpPerChannel" ],
         "stopTrigger":   [ "userorcontrol" ]
       },
-      "AgingLaserTrending": {
+      "AgingLaserTrendingKuba": {
         "active": "true",
         "className": "o2::quality_control::postprocessing::SliceTrendingTask",
         "moduleName": "QualityControl",
@@ -65,7 +64,7 @@
         "dataSources": [
           {
             "type": "repository",
-            "path":  "FT0/MO/AgingLaserPostProc",
+            "path":  "FT0/MO/AgingLaserPostProcKuba",
             "names": [ "AmpPerChannelNormWeightedMeanA" ],
             "reductorName": "o2::quality_control_modules::common::TH1SliceReductor",
             "axisDivision": [
@@ -98,7 +97,7 @@
           },
           {
             "type": "repository",
-            "path":  "FT0/MO/AgingLaserPostProc",
+            "path":  "FT0/MO/AgingLaserPostProcKuba",
             "names": [ "AmpPerChannelNormWeightedMeanC" ],
             "reductorName": "o2::quality_control_modules::common::TH1SliceReductor",
             "axisDivision": [
@@ -163,7 +162,7 @@
         ],
 
         "initTrigger":   [ "userorcontrol" ],
-        "updateTrigger": [ "newobject:qcdb:FT0/MO/AgingLaserPostProc/AmpPerChannelNormWeightedMeanA" ],
+        "updateTrigger": [ "newobject:qcdb:FT0/MO/AgingLaserPostProcKuba/AmpPerChannelNormWeightedMeanA" ],
         "stopTrigger":   [ "userorcontrol" ]
       }
   }

@@ -110,7 +110,7 @@ class PostProcTask final : public quality_control::postprocessing::PostProcessin
 
   // Trending scalar histograms
   std::unique_ptr<TH1F> mTrendAInner;
-  std::unique_ptr<TH1F> mTrendAOuter; 
+  std::unique_ptr<TH1F> mTrendAOuter;
   std::unique_ptr<TH1F> mTrendC;
   std::unique_ptr<TH1F> mTrendAll;
 

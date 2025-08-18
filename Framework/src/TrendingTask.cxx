@@ -142,28 +142,38 @@ void TrendingTask::initializeTrend(o2::quality_control::repository::DatabaseInte
   }
 }
 
-static inline bool hasAnyStyle(const TrendingTaskConfig::GraphStyle& s) {
+static inline bool hasAnyStyle(const TrendingTaskConfig::GraphStyle& s)
+{
   return s.lineColor >= 0 || s.lineStyle >= 0 || s.lineWidth >= 0 ||
          s.markerColor >= 0 || s.markerStyle >= 0 || s.markerSize > 0.f ||
          s.fillColor >= 0 || s.fillStyle >= 0;
 }
 
-template<class T> // TGraph*, TH1*, etc. (anything with TAttLine/TAttMarker/TAttFill)
-static inline void applyStyleIfAny(T* obj, const TrendingTaskConfig::GraphStyle& s) {
-  if (!hasAnyStyle(s) || !obj) return;
+template <class T> // TGraph*, TH1*, etc. (anything with TAttLine/TAttMarker/TAttFill)
+static inline void applyStyleIfAny(T* obj, const TrendingTaskConfig::GraphStyle& s)
+{
+  if (!hasAnyStyle(s) || !obj)
+    return;
 
   // Colors
-  if (s.lineColor >= 0)     obj->SetLineColor(s.lineColor);
-  if (s.markerColor >= 0)   obj->SetMarkerColor(s.markerColor);
+  if (s.lineColor >= 0)
+    obj->SetLineColor(s.lineColor);
+  if (s.markerColor >= 0)
+    obj->SetMarkerColor(s.markerColor);
 
-  if (s.lineStyle >= 0)   obj->SetLineStyle(s.lineStyle);   // TAttLine
-  if (s.lineWidth >= 0)   obj->SetLineWidth(s.lineWidth);   // TAttLine
-  if (s.markerStyle >= 0) obj->SetMarkerStyle(s.markerStyle); // TAttMarker
-  if (s.markerSize > 0.f) obj->SetMarkerSize(s.markerSize);   // TAttMarker
-  if (s.fillColor >= 0)   obj->SetFillColor(s.fillColor);     // TAttFill
-  if (s.fillStyle >= 0)   obj->SetFillStyle(s.fillStyle);     // TAttFill
+  if (s.lineStyle >= 0)
+    obj->SetLineStyle(s.lineStyle); // TAttLine
+  if (s.lineWidth >= 0)
+    obj->SetLineWidth(s.lineWidth); // TAttLine
+  if (s.markerStyle >= 0)
+    obj->SetMarkerStyle(s.markerStyle); // TAttMarker
+  if (s.markerSize > 0.f)
+    obj->SetMarkerSize(s.markerSize); // TAttMarker
+  if (s.fillColor >= 0)
+    obj->SetFillColor(s.fillColor); // TAttFill
+  if (s.fillStyle >= 0)
+    obj->SetFillStyle(s.fillStyle); // TAttFill
 }
-
 
 void TrendingTask::initialize(Trigger, framework::ServiceRegistryRef services)
 {
@@ -366,7 +376,8 @@ TCanvas* TrendingTask::drawPlot(const TrendingTaskConfig::Plot& plotConfig)
   };
 
   auto getLastDrawnGraph = []() -> TGraph* {
-    if (!gPad) return nullptr;
+    if (!gPad)
+      return nullptr;
     TGraph* last = nullptr;
     TIter it(gPad->GetListOfPrimitives());
     while (TObject* obj = it()) {
@@ -378,21 +389,30 @@ TCanvas* TrendingTask::drawPlot(const TrendingTaskConfig::Plot& plotConfig)
   };
 
   auto applyStyleToGraph = [&](TGraph* gr, const TrendingTaskConfig::GraphStyle& st) {
-    if (!gr) return;
+    if (!gr)
+      return;
     const Color_t ln = resolveColor(st.lineColor);
     const Color_t mk = resolveColor(st.markerColor);
     const Color_t fl = resolveColor(st.fillColor);
 
-    if (ln >= 0) gr->SetLineColor(ln);
-    if (st.lineStyle >= 0) gr->SetLineStyle(st.lineStyle);
-    if (st.lineWidth >= 0) gr->SetLineWidth(st.lineWidth);
+    if (ln >= 0)
+      gr->SetLineColor(ln);
+    if (st.lineStyle >= 0)
+      gr->SetLineStyle(st.lineStyle);
+    if (st.lineWidth >= 0)
+      gr->SetLineWidth(st.lineWidth);
 
-    if (mk >= 0) gr->SetMarkerColor(mk);
-    if (st.markerStyle >= 0) gr->SetMarkerStyle(st.markerStyle);
-    if (st.markerSize >= 0.f) gr->SetMarkerSize(st.markerSize);
+    if (mk >= 0)
+      gr->SetMarkerColor(mk);
+    if (st.markerStyle >= 0)
+      gr->SetMarkerStyle(st.markerStyle);
+    if (st.markerSize >= 0.f)
+      gr->SetMarkerSize(st.markerSize);
 
-    if (fl >= 0) gr->SetFillColor(fl);
-    if (st.fillStyle >= 0) gr->SetFillStyle(st.fillStyle);
+    if (fl >= 0)
+      gr->SetFillColor(fl);
+    if (st.fillStyle >= 0)
+      gr->SetFillStyle(st.fillStyle);
   };
 
   // Regardless of drawing kind, TTree::Draw produces a TH1 "htemp" used for axes/title
@@ -449,7 +469,8 @@ TCanvas* TrendingTask::drawPlot(const TrendingTaskConfig::Plot& plotConfig)
         htemp->SetTitle("background");
       }
       htemp->BufferEmpty();
-      if (!background) background = htemp;
+      if (!background)
+        background = htemp;
     }
 
     // Legend entry for graphs

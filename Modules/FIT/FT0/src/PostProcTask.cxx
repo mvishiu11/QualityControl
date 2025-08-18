@@ -131,22 +131,22 @@ void PostProcTask::initialize(Trigger trg, framework::ServiceRegistryRef service
   if (mTrendEnabled) {
     mTrendAInner = helper::registerHist<TH1F>(
       getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
-      "", "TrendsScalars/AInner", "A-side inner amplitude trend;Time;Mean amplitude (ADC)", 
+      "", "TrendsScalars/AInner", "A-side inner amplitude trend;Time;Mean amplitude (ADC)",
       1, -100, 4100);
-    
+
     mTrendAOuter = helper::registerHist<TH1F>(
       getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
-      "", "TrendsScalars/AOuter", "A-side outer amplitude trend;Time;Mean amplitude (ADC)", 
+      "", "TrendsScalars/AOuter", "A-side outer amplitude trend;Time;Mean amplitude (ADC)",
       1, -100, 4100);
-    
+
     mTrendC = helper::registerHist<TH1F>(
       getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
-      "", "TrendsScalars/C", "C-side amplitude trend;Time;Mean amplitude (ADC)", 
+      "", "TrendsScalars/C", "C-side amplitude trend;Time;Mean amplitude (ADC)",
       1, -100, 4100);
-    
+
     mTrendAll = helper::registerHist<TH1F>(
       getObjectsManager(), quality_control::core::PublicationPolicy::ThroughStop,
-      "", "TrendsScalars/All", "All channels amplitude trend;Time;Mean amplitude (ADC)", 
+      "", "TrendsScalars/All", "All channels amplitude trend;Time;Mean amplitude (ADC)",
       1, -100, 4100);
   }
 
@@ -254,14 +254,14 @@ void PostProcTask::update(Trigger trg, framework::ServiceRegistryRef serviceReg)
       histAmpAll->Add(mHistAmpAInner.get());
       histAmpAll->Add(mHistAmpAOuter.get());
       histAmpAll->Add(mHistAmpC.get());
-      
+
       // Perform Gaussian fits on amplitude regions
       double sigma; // unused but required by function signature
       fitRegionGaussian(mHistAmpAInner.get(), mMuAInner, sigma);
       fitRegionGaussian(mHistAmpAOuter.get(), mMuAOuter, sigma);
       fitRegionGaussian(mHistAmpC.get(), mMuC, sigma);
       fitRegionGaussian(histAmpAll.get(), mMuAll, sigma);
-      
+
       updateTrendingScalars();
     }
   }
@@ -449,12 +449,12 @@ std::pair<double, double> PostProcTask::computeWindow(double peak) const
 {
   double xmin = std::max<double>(peak - mLeftSliceFrac * std::abs(peak), -100.0);
   double xmax = std::min<double>(peak + mRightSliceFrac * std::abs(peak), 4100.0);
-  
+
   if (xmax <= xmin) {
     xmin = std::max<double>(peak - 1.0, -100.0);
     xmax = std::min<double>(peak + 1.0, 4100.0);
   }
-  
+
   return { xmin, xmax };
 }
 
@@ -465,40 +465,41 @@ bool PostProcTask::fitRegionGaussian(TH1F* regionHist, double& outMu, double& ou
     outSigma = 0.;
     return false;
   }
-  
+
   const int bMax = regionHist->GetMaximumBin();
   const double peak = regionHist->GetBinCenter(bMax);
   const auto [xmin, xmax] = computeWindow(peak);
-  
+
   TF1 fG("fG_tmp", "gaus", xmin, xmax);
   const int fitResult = regionHist->Fit(&fG, "QNR", "", xmin, xmax);
-  
+
   if (fitResult != 0) {
     outMu = std::numeric_limits<double>::quiet_NaN();
     outSigma = 0.;
     return false;
   }
-  
+
   outMu = fG.GetParameter(1);
   outSigma = std::abs(fG.GetParameter(2));
-  
+
   if (outMu < -100.0 || outMu > 4100.0 || outSigma <= 0.) {
     outMu = std::numeric_limits<double>::quiet_NaN();
     outSigma = 0.;
     return false;
   }
-  
+
   return true;
 }
 
 void PostProcTask::updateTrendingScalars()
 {
   auto updateHist = [](TH1F* h, double value) {
-    if (!h || std::isnan(value)) return;
+    if (!h || std::isnan(value))
+      return;
     h->Reset("ICES");
     h->Fill(value);
   };
-  
+
   updateHist(mTrendAInner.get(), mMuAInner);
   updateHist(mTrendAOuter.get(), mMuAOuter);
   updateHist(mTrendC.get(), mMuC);

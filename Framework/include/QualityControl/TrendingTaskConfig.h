@@ -34,14 +34,14 @@ struct TrendingTaskConfig : PostProcessingConfig {
 
   // graph style configuration
   struct GraphStyle {
-    int   lineColor   = -1;
-    int   lineStyle   = -1;
-    int   lineWidth   = -1;
-    int   markerColor = -1;
-    int   markerStyle = -1;
-    float markerSize  = -1.f;
-    int   fillColor   = -1;
-    int   fillStyle   = -1;
+    int lineColor = -1;
+    int lineStyle = -1;
+    int lineWidth = -1;
+    int markerColor = -1;
+    int markerStyle = -1;
+    float markerSize = -1.f;
+    int fillColor = -1;
+    int fillStyle = -1;
   };
 
   // this corresponds to one TTree::Draw() call, i.e. one graph or histogram drawing
@@ -57,9 +57,9 @@ struct TrendingTaskConfig : PostProcessingConfig {
 
   // legend configuration
   struct LegendConfig {
-    bool  enabled{false};
-    int   nColumns{1};
-    float x1{0.30f}, y1{0.20f}, x2{0.55f}, y2{0.35f}; // NDC coords
+    bool enabled{ false };
+    int nColumns{ 1 };
+    float x1{ 0.30f }, y1{ 0.20f }, x2{ 0.55f }, y2{ 0.35f }; // NDC coords
   };
 
   // this corresponds to one canvas which can include multiple graphs

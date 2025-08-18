@@ -1,0 +1,109 @@
+{
+    "qc": {
+      "config": {
+        "database": {
+          "implementation": "CCDB",
+          "host": "ccdb-test.cern.ch:8080",
+          "username": "not_applicable",
+          "password": "not_applicable",
+          "name": "not_applicable"
+        },
+        "monitoring": { "url": "infologger:///debug?qc" },
+        "consul": { "url": "" },
+        "conditionDB": { "url": "alice-ccdb.cern.ch" },
+        "bookkeeping": { "url": "" }
+      },
+  
+      "postprocessing": {
+        "PostProc": {
+          "active": "true",
+          "className": "o2::quality_control_modules::ft0::PostProcTask",
+          "moduleName": "QcFT0",
+          "detectorName": "FT0",
+          "custom": {
+            "numOrbitsInTF": "32",
+            "cycleDurationMoName": "CycleDurationNTF",
+            "timestampSourceLhcIf": "metadata",
+            "pathDigitQcTask": "FT0/MO/Digits",
+            "trendEnabled": "true",
+            "leftSliceFrac": "0.15",
+            "rightSliceFrac": "0.15"
+          },
+          "initTrigger": [
+            "userorcontrol"
+          ],
+          "updateTrigger": [
+            "newobject:qcdb:FT0/MO/Digits/AmpPerChannel"
+          ],
+          "stopTrigger": [
+            "userorcontrol"
+          ]
+        },
+        "TrendingRegions": {
+          "active": "true",
+          "className": "o2::quality_control::postprocessing::TrendingTask",
+          "moduleName": "QcCommon",
+          "detectorName": "FT0",
+  
+          "resumeTrend": "false",
+          "producePlotsOnUpdate": "true",
+          "trendingTimestamp": "validFrom",
+  
+          "dataSources": [
+            {
+              "type": "repository",
+              "path": "FT0/MO/PostProc/TrendsScalars",
+              "names": ["AInner", "AOuter", "C", "All"],
+              "reductorName": "o2::quality_control_modules::common::TH1Reductor",
+              "moduleName": "QcCommon"
+            }
+          ],
+  
+          "plots": [
+              {
+                "name": "trend_mu_adc_mip",
+                "title": "FT0 MIP peak trends",
+                "graphAxisLabel": "ADC Channels:",
+                "graphYRange": "12:16",
+                "colorPalette": "1",
+                "legend": { "x1": 0.70, "y1": 0.70, "x2": 0.93, "y2": 0.90, "nColumns": 1 },
+                "graphs": [
+                  {
+                    "title": "All trend",
+                    "varexp": "All.mean:time",
+                    "selection": "",
+                    "option": "*LP PMC PLC",
+                    "style": { "markerColor": 4, "markerStyle": 20, "lineWidth": 2 }
+                  },
+                  {
+                    "title": "AInner trend",
+                    "varexp": "AInner.mean:time",
+                    "selection": "",
+                    "option": "*LP PMC PLC",
+                    "style": { "markerColor": 3, "markerStyle": 30, "lineWidth": 2 }
+                  },
+                  {
+                    "title": "AOuter trend",
+                    "varexp": "AOuter.mean:time",
+                    "selection": "",
+                    "option": "*LP PMC PLC",
+                    "style": { "markerColor": 30, "markerStyle": 23, "lineWidth": 2 }
+                  },
+                  {
+                    "title": "C trend",
+                    "varexp": "C.mean:time",
+                    "selection": "",
+                    "option": "*LP PMC PLC",
+                    "style": { "markerColor": 5, "markerStyle": 33, "lineWidth": 2 }
+                  }
+                ]
+              }
+            ],
+  
+          "initTrigger":   ["userorcontrol"],
+          "updateTrigger": ["newobject:qcdb:FT0/MO/PostProc/TrendsScalars/All"],
+          "stopTrigger":   ["userorcontrol"]
+        }
+      }
+    }
+  }
