@@ -81,11 +81,11 @@ void AgingLaserPostProcTask::configure(const boost::property_tree::ptree& cfg)
 
 void AgingLaserPostProcTask::initialize(Trigger, framework::ServiceRegistryRef)
 {
-  ILOG(Info) << "initialize AgingLaserPostProcTask" << ENDM;
+  ILOG(Debug, Devel) << "initialize AgingLaserPostProcTask" << ENDM;
 
-  ILOG(Info) << "agingTaskSourcePath : " << mAmpMoPath << ENDM;
-  ILOG(Info) << "ADC search window : [" << mADCSearchMin << ", " << mADCSearchMax << "]" << ENDM;
-  ILOG(Info) << "fractional window : a=" << mFracWindowA << "  b=" << mFracWindowB << ENDM;
+  ILOG(Debug, Devel) << "agingTaskSourcePath : " << mAmpMoPath << ENDM;
+  ILOG(Debug, Devel) << "ADC search window : [" << mADCSearchMin << ", " << mADCSearchMax << "]" << ENDM;
+  ILOG(Debug, Devel) << "fractional window : a=" << mFracWindowA << "  b=" << mFracWindowB << ENDM;
 
   mAmpVsChNormWeightedMeanA = fit::helper::registerHist<TH1F>(
     getObjectsManager(),
@@ -185,12 +185,12 @@ void AgingLaserPostProcTask::update(Trigger t, framework::ServiceRegistryRef srv
     processChannel(ch);
   }
 
-  ILOG(Info) << "update done – " << nRef << " reference fits, norm=" << norm << ENDM;
+  ILOG(Debug, Devel) << "update done – " << nRef << " reference fits, norm=" << norm << ENDM;
 }
 
 void AgingLaserPostProcTask::finalize(Trigger, framework::ServiceRegistryRef)
 {
-  ILOG(Info) << "finalize AgingLaserPostProcTask" << ENDM;
+  ILOG(Debug, Devel) << "finalize AgingLaserPostProcTask" << ENDM;
 }
 
 } // namespace o2::quality_control_modules::ft0
