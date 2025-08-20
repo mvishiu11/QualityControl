@@ -22,11 +22,11 @@
           "query": "digits:FT0/DIGITSBC/0;channels:FT0/DIGITSCH/0"
         },
         "taskParameters": {
-          "referenceChannelIDs":      "208,209,210",
+          "referenceChannelIDs":      "208,209,210,211",
           "laserTriggerBCs":          "0,1783",
           "detectorBCdelay":          "131",
-          "referencePeak1BCdelays":   "115,115,115",
-          "referencePeak2BCdelays":   "136,142,135",
+          "referencePeak1BCdelays":   "115,115,115,115",
+          "referencePeak2BCdelays":   "136,142,135,141",
           "debug": "false"
         }
       }
